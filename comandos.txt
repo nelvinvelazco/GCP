@@ -1,0 +1,7 @@
+gcloud functions deploy create_dataset_and_table_and_move_data_bq 
+--runtime python311 
+--region southamerica-east1 
+--trigger-resource "gmaps_data2" 
+--trigger-event google.cloud.storage.object.v1.finalized
+
+
