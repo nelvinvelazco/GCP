@@ -1,7 +1,19 @@
-gcloud functions deploy create_dataset_and_table_and_move_data_bq 
+gcloud functions deploy Procesar_Data 
 --runtime python311 
 --region southamerica-east1 
---trigger-resource "gmaps_data2" 
---trigger-event google.cloud.storage.object.v1.finalized
+--trigger-resource "gmaps_data2"
+--memory 2048MB 
+--trigger-event google.storage.object.finalize
 
+gcloud functions deploy Procesar_Data --runtime python311 --region southamerica-east1 --trigger-resource "gmaps_data2" --memory 2048MB --trigger-event google.storage.object.finalize
 
+---------------------------------------------------------------------------------
+
+gcloud functions deploy Procesar_Data_json 
+--runtime python311 
+--region southamerica-east1 
+--trigger-resource "gmaps_data2"
+--memory 2048MB 
+--trigger-event google.storage.object.finalize
+
+gcloud functions deploy Procesar_Data_json --runtime python311 --region southamerica-east1 --trigger-resource "gmaps_data2" --memory 2048MB --trigger-event google.storage.object.finalize

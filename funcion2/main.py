@@ -4,12 +4,12 @@ from google.cloud import storage
 import io
 
 def Transformar_data(data):
-    df_cargado= data.drop(['N_VICTIMAS', 'HORA', 'TIPO_DE_CALLE','VICTIMA', 
-                                'ACUSADO', 'PARTICIPANTES'], axis=1)
-    df_cargado= df_cargado[df_cargado['LONGITUD'] !='SIN DATO']
-    df_cargado['FECHA'] = pd.to_datetime(df_cargado['FECHA'])
-    #df_lesiones['longitud']= df_lesiones['longitud'].astype(float)
-    #df_lesiones['latitud']= df_lesiones['latitud'].astype(float)
+    df_cargado= data.drop(['relative_results','address', 'num_of_reviews', 'description', 'url','category', 'MISC', 'hours'], axis=1) 
+    df_cargado= df_cargado.dropna(subset=['name']) # Elimina filas con address nulas
+    df_cargado['name']= df_cargado['name'].astype('string')
+    # Ordena el orden de las columnas
+    df_cargado= df_cargado[['gmap_id','name', 'latitude', 'longitude', 'avg_rating', 'price', 'state']]
+    print('ARCHIVO TRANSFORMADO .....')
     return df_cargado
 
 ######################################################################
@@ -23,7 +23,9 @@ def Cargar_Data(file_name, bucket_name):
     content = blob.download_as_string()
 
     # Crear un DataFrame de Pandas a partir del contenido del archivo CSV
-    df = pd.read_csv(io.BytesIO(content))
+    df = pd.read_json(io.BytesIO(content),lines=True)
+
+    print(f'SE HA CARGADO EL ARCHIVO: {file_name} ......')
     df= Transformar_data(df)
     return df
 
@@ -40,13 +42,13 @@ def Guardar_BigQuery(data, dataset_id, table_id, schema):
         tabla_existe = False
 
     if tabla_existe:
-        print(f'La tabla {table_id} ya existe en el dataset {dataset_id}.')
+        print(f'La tabla {table_id} ya existe en el dataset {dataset_id} ......')
     else:
-        print(f'La tabla {table_id} no existe en el dataset {dataset_id}.')
+        print(f'La tabla {table_id} no existe en el dataset {dataset_id} ......')
         # Crear la tabla si no existe
         tabla = bigquery.Table(table_ref, schema=schema)
         tabla = bigquery_client.create_table(tabla)
-        print(f'Se ha creado la tabla {table_id} en el dataset {dataset_id}.')
+        print(f'Se ha creado la tabla {table_id} en el dataset {dataset_id}.....')
 
 
         #df.to_gbq(table_ref,if_exists="replace")
@@ -55,20 +57,22 @@ def Guardar_BigQuery(data, dataset_id, table_id, schema):
     job_config.write_disposition = bigquery.WriteDisposition.WRITE_APPEND if tabla_existe else bigquery.WriteDisposition.WRITE_TRUNCATE
     job = bigquery_client.load_table_from_dataframe(data, table_ref, job_config=job_config)
     job.result()
-    print('REGISTROS AGREGADOS CORRECTAMENTE.')
+    print('REGISTROS AGREGADOS CORRECTAMENTE.......')
 
-def Procesar_Data(data, context):
+def Procesar_Data_json(data, context):
     file_name= data['name']
     bucket_name= data['bucket']
     dataset_id= 'BD_Henry'
-    table_id = 'hechos_homicidios'
+    table_id = 'sitios_gmaps'
 
     schema = [
-        bigquery.SchemaField("Id_hecho", bigquery.enums.SqlTypeNames.STRING),
-        bigquery.SchemaField("FECHA", bigquery.enums.SqlTypeNames.DATE),
-        bigquery.SchemaField("COMUNA", bigquery.enums.SqlTypeNames.INT64),
-        bigquery.SchemaField("LONGITUD", bigquery.enums.SqlTypeNames.STRING),
-        bigquery.SchemaField("LATITUD", bigquery.enums.SqlTypeNames.STRING)
+        bigquery.SchemaField("gmap_id", bigquery.enums.SqlTypeNames.STRING),
+        bigquery.SchemaField("name", bigquery.enums.SqlTypeNames.STRING),
+        bigquery.SchemaField("latitude", bigquery.enums.SqlTypeNames.FLOAT64),
+        bigquery.SchemaField("longitude", bigquery.enums.SqlTypeNames.FLOAT64),
+        bigquery.SchemaField("avg_rating", bigquery.enums.SqlTypeNames.FLOAT64),
+        bigquery.SchemaField("price", bigquery.enums.SqlTypeNames.STRING),
+        bigquery.SchemaField("state", bigquery.enums.SqlTypeNames.STRING),
     ]
 
     df_procesado= Cargar_Data(file_name, bucket_name)
