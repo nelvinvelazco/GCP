@@ -3,37 +3,86 @@ from google.cloud import bigquery
 from google.cloud import storage
 import io
 
-def Transformar_data(data):
-    df_cargado= data.drop(['relative_results','address', 'num_of_reviews', 'description', 'url','category', 'MISC', 'hours'], axis=1) 
-    df_cargado= df_cargado.dropna(subset=['name']) # Elimina filas con address nulas
-    df_cargado['name']= df_cargado['name'].astype('string')
-    # Ordena el orden de las columnas
-    df_cargado= df_cargado[['gmap_id','name', 'latitude', 'longitude', 'avg_rating', 'price', 'state']]
-    print('ARCHIVO TRANSFORMADO .....')
-    return df_cargado
+def Transformar_data(data, df_estados):
+    df_data= data
+    df_data= df_data.dropna(subset=['address']) # Elimina filas con address nulas
+    df_data= df_data.dropna(subset=['category']) # Elimina filas con category nulas
+    df_data= df_data.explode('category')
+    df_data= df_data[df_data['category'] == "Restaurant"]
 
-######################################################################
+    # Se guardan las columnas MISC y el gmap_id en un df
+    df_misc= df_data[['gmap_id','MISC']]
+    df_misc= df_misc.dropna(subset=['MISC']) # Elimina filas con MISC nulo
+
+    # Funcion para cargar los json a una serie de pandas
+    def expandir_diccionario(diccionario):
+        return pd.Series(diccionario)
+
+    # Se concatenas las series al df original
+    df_expandido = pd.concat([df_misc, df_misc['MISC'].apply(expandir_diccionario)], axis=1)
+    df_expandido.drop('MISC', axis=1, inplace=True)     # Se elimina la columna de MISC
+    df_misc= df_expandido
+
+    df_Service_options= df_misc[['gmap_id','Service options']]      # Se crea un df solo las columnas gmap_id y Service Options
+    df_Service_options= df_Service_options.rename(columns={'Service options': 'service_option'}) # cambiar nombre de la columna
+    df_Service_options= df_Service_options.dropna(subset=['service_option']) # Elimina filas con columna 'Service Opciones nulas'
+    df_Service_options= df_Service_options.explode('service_option')
+
+    df_Planning= df_misc[['gmap_id','Planning']]      # Se crea un df solo las columnas gmap_id y Planning
+    df_Planning= df_Planning.rename(columns={'Planning': 'planning_option'}) # cambiar nombre de la columna
+    df_Planning= df_Planning.dropna(subset=['planning_option']) # Elimina filas con columna 'Service Opciones nulas'
+    df_Planning= df_Planning.explode('planning_option')
+
+    # En pruebas se detecto que esta fila estaba dando problemas con la funcion para extraer, asi que se procede a eliminarla
+    df_data= df_data[df_data['address'] != "〒10028 New York, Lexington Ave, (New) Ichie Japanese Restaurant"]
+
+    def Ext_Ciudad_Estado(dir):
+        ciudad= "SIN DATO"
+        estado= "SIN DATO"     
+        if len(str(dir)) > 10:  
+            lista= str(dir).split(',')
+            if len(lista) > 2:
+                codigo= lista[-1][1:3]
+                df_filtro= df_estados[df_estados['nombre_corto'].str.contains(codigo)]        
+                if not df_filtro.empty:            
+                    ciudad = lista[-2].strip()
+                    estado= df_filtro.nombre_largo.values[0].strip()
+        return ciudad, estado
+    
+    # Extraer ciudad y estado de la columna direccion y guardarda en 2 columnas
+    df_data[['ciudad','estado']] = df_data.apply(lambda x: Ext_Ciudad_Estado(x['address']), axis=1, result_type='expand')
+
+    #Borrar Columnas
+    df_data= df_data.drop(['relative_results','address', 'num_of_reviews', 'description', 'url','category', 'MISC', 'hours'], axis=1) 
+    # Ordena el orden de las columnas
+    df_data= df_data[['gmap_id','name', 'ciudad', 'estado', 'latitude', 'longitude', 'avg_rating', 'price', 'state']]
+
+    print(' ........ TAREAS DE EXTRACION Y TRANSFORMACION COMPLETADAS .....')
+    return df_data, df_Service_options, df_Planning
+
+
 def Cargar_Data(file_name, bucket_name):
     storage_client = storage.Client()
 
-    
     # Descargar el archivo CSV desde GCS
     bucket = storage_client.bucket(bucket_name)
     blob = bucket.blob(file_name)
     content = blob.download_as_string()
-
-    # Crear un DataFrame de Pandas a partir del contenido del archivo CSV
-    df = pd.read_json(io.BytesIO(content),lines=True)
-
-    print(f'SE HA CARGADO EL ARCHIVO: {file_name} ......')
-    df= Transformar_data(df)
-    return df
-
-#########################################################
-def Guardar_BigQuery(data, dataset_id, table_id, schema):
-    bigquery_client = bigquery.Client()
-
     
+    # Crear un DataFrame de Pandas a partir del contenido del archivo json
+    df_data = pd.read_json(io.BytesIO(content),lines=True)
+
+    blob_estados= bucket.blob('estados_usa.csv')
+    df_estados= pd.read_csv(io.BytesIO(blob_estados.download_as_string()), delimiter = ';', encoding = "utf-8")
+
+    print(f'...... SE HA CARGADO EL ARCHIVO: {file_name} ......')
+
+    df_data, df_Service_options, df_Planning= Transformar_data(df_data, df_estados)
+    return df_data, df_Service_options, df_Planning
+
+
+def Guardar_en_BigQuery(data, dataset_id, table_id, schema):
+    bigquery_client = bigquery.Client()
     table_ref = bigquery_client.dataset(dataset_id).table(table_id)
     try:
         tabla = bigquery_client.get_table(table_ref)
@@ -42,9 +91,9 @@ def Guardar_BigQuery(data, dataset_id, table_id, schema):
         tabla_existe = False
 
     if tabla_existe:
-        print(f'La tabla {table_id} ya existe en el dataset {dataset_id} ......')
+        print(f'------- La tabla {table_id} ya existe en el dataset {dataset_id} ------')
     else:
-        print(f'La tabla {table_id} no existe en el dataset {dataset_id} ......')
+        print(f'------- La tabla {table_id} no existe en el dataset {dataset_id} ------')
         # Crear la tabla si no existe
         tabla = bigquery.Table(table_ref, schema=schema)
         tabla = bigquery_client.create_table(tabla)
@@ -57,17 +106,20 @@ def Guardar_BigQuery(data, dataset_id, table_id, schema):
     job_config.write_disposition = bigquery.WriteDisposition.WRITE_APPEND if tabla_existe else bigquery.WriteDisposition.WRITE_TRUNCATE
     job = bigquery_client.load_table_from_dataframe(data, table_ref, job_config=job_config)
     job.result()
-    print('REGISTROS AGREGADOS CORRECTAMENTE.......')
+    print(f'----- REGISTROS AGREGADOS CORRECTAMENTE EN: {table_id} -------')
+    return
 
-def Procesar_Data_json(data, context):
+
+def Procesar_Data_Sitios(data, context):
     file_name= data['name']
     bucket_name= data['bucket']
     dataset_id= 'BD_Henry'
     table_id = 'sitios_gmaps'
-
-    schema = [
+    schema_sitios = [
         bigquery.SchemaField("gmap_id", bigquery.enums.SqlTypeNames.STRING),
         bigquery.SchemaField("name", bigquery.enums.SqlTypeNames.STRING),
+        bigquery.SchemaField("ciudad", bigquery.enums.SqlTypeNames.STRING),
+        bigquery.SchemaField("estado", bigquery.enums.SqlTypeNames.STRING),
         bigquery.SchemaField("latitude", bigquery.enums.SqlTypeNames.FLOAT64),
         bigquery.SchemaField("longitude", bigquery.enums.SqlTypeNames.FLOAT64),
         bigquery.SchemaField("avg_rating", bigquery.enums.SqlTypeNames.FLOAT64),
@@ -75,5 +127,19 @@ def Procesar_Data_json(data, context):
         bigquery.SchemaField("state", bigquery.enums.SqlTypeNames.STRING),
     ]
 
-    df_procesado= Cargar_Data(file_name, bucket_name)
-    Guardar_BigQuery(df_procesado, dataset_id, table_id, schema)
+    schema_service = [
+        bigquery.SchemaField("gmap_id", bigquery.enums.SqlTypeNames.STRING),
+        bigquery.SchemaField("service_option", bigquery.enums.SqlTypeNames.STRING),        
+    ]
+    
+    schema_planning = [
+        bigquery.SchemaField("gmap_id", bigquery.enums.SqlTypeNames.STRING),
+        bigquery.SchemaField("planning_option", bigquery.enums.SqlTypeNames.STRING),        
+    ]
+
+    df_procesado, df_Service_options, df_Planning = Cargar_Data(file_name, bucket_name)
+
+    Guardar_en_BigQuery(df_procesado, dataset_id, table_id, schema_sitios)
+    Guardar_en_BigQuery(df_Service_options, dataset_id, 'service_sitios', schema_service)
+    Guardar_en_BigQuery(df_Planning, dataset_id, 'planning_sitios', schema_planning)
+

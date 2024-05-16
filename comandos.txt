@@ -13,7 +13,7 @@ gcloud functions deploy Procesar_Data_json
 --runtime python311 
 --region southamerica-east1 
 --trigger-resource "gmaps_data2"
---memory 2048MB 
+--memory 8192MB 
 --trigger-event google.storage.object.finalize
 
-gcloud functions deploy Procesar_Data_json --runtime python311 --region southamerica-east1 --trigger-resource "gmaps_data2" --memory 2048MB --trigger-event google.storage.object.finalize
+gcloud functions deploy Procesar_Data_Sitios --runtime python311 --region southamerica-east1 --trigger-resource "gmaps_data2" --memory 8192MB --trigger-event google.storage.object.finalize
