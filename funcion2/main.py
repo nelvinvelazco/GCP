@@ -71,14 +71,14 @@ def Cargar_Data(file_name, bucket_name):
     
     # Crear un DataFrame de Pandas a partir del contenido del archivo json
     df_data = pd.read_json(io.BytesIO(content),lines=True)
-
+    
+    # Crear Dataframe de pandas con los estados
     blob_estados= bucket.blob('estados_usa.csv')
     df_estados= pd.read_csv(io.BytesIO(blob_estados.download_as_string()), delimiter = ';', encoding = "utf-8")
 
-    print(f'...... SE HA CARGADO EL ARCHIVO: {file_name} ......')
+    print(f'... SE HA CARGADO EL ARCHIVO: {file_name} ...')
 
-    df_data, df_Service_options, df_Planning= Transformar_data(df_data, df_estados)
-    return df_data, df_Service_options, df_Planning
+    return df_data, df_estados
 
 
 def Guardar_en_BigQuery(data, dataset_id, table_id, schema):
@@ -91,17 +91,15 @@ def Guardar_en_BigQuery(data, dataset_id, table_id, schema):
         tabla_existe = False
 
     if tabla_existe:
-        print(f'------- La tabla {table_id} ya existe en el dataset {dataset_id} ------')
+        print(f'----- La tabla {table_id} ya existe en el dataset {dataset_id} -----')
     else:
-        print(f'------- La tabla {table_id} no existe en el dataset {dataset_id} ------')
+        print(f'----- La tabla {table_id} no existe en el dataset {dataset_id} -----')
         # Crear la tabla si no existe
         tabla = bigquery.Table(table_ref, schema=schema)
         tabla = bigquery_client.create_table(tabla)
-        print(f'Se ha creado la tabla {table_id} en el dataset {dataset_id}.....')
-
-
-        #df.to_gbq(table_ref,if_exists="replace")
-        # Agregar los registros de df a la tabla existente o recién creada
+        print(f'----- Se ha creado la tabla {table_id} en el dataset {dataset_id} -----')
+        
+    # Agregar los registros de data a la tabla existente o recién creada
     job_config = bigquery.LoadJobConfig()
     job_config.write_disposition = bigquery.WriteDisposition.WRITE_APPEND if tabla_existe else bigquery.WriteDisposition.WRITE_TRUNCATE
     job = bigquery_client.load_table_from_dataframe(data, table_ref, job_config=job_config)
@@ -136,9 +134,13 @@ def Procesar_Data_Sitios(data, context):
         bigquery.SchemaField("gmap_id", bigquery.enums.SqlTypeNames.STRING),
         bigquery.SchemaField("planning_option", bigquery.enums.SqlTypeNames.STRING),        
     ]
-
-    df_procesado, df_Service_options, df_Planning = Cargar_Data(file_name, bucket_name)
-
+        
+    # Carga los archivo a procesar en un dataframe 
+    df_data, df_estados = Cargar_Data(file_name, bucket_name)
+    # Realiza las transformaciones y limpieza del archivo y lo devuelve junto con 2 df resultantes
+    df_procesado, df_Service_options, df_Planning= Transformar_data(df_data, df_estados)
+    
+    # Guardas los datos procesados en BigQuery
     Guardar_en_BigQuery(df_procesado, dataset_id, table_id, schema_sitios)
     Guardar_en_BigQuery(df_Service_options, dataset_id, 'service_sitios', schema_service)
     Guardar_en_BigQuery(df_Planning, dataset_id, 'planning_sitios', schema_planning)
