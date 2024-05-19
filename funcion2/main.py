@@ -9,6 +9,7 @@ def Transformar_data(data, df_estados):
     df_data= df_data.dropna(subset=['category']) # Elimina filas con category nulas
     df_data= df_data.explode('category')
     df_data= df_data[df_data['category'] == "Restaurant"]
+    df_data= df_data.fillna({'price':'SIN DATO', 'state':'SIN DATO'})     # Se imputan los valores nulos a 'SIN DATO'
 
     # Se guardan las columnas MISC y el gmap_id en un df
     df_misc= df_data[['gmap_id','MISC']]
@@ -50,14 +51,18 @@ def Transformar_data(data, df_estados):
         return ciudad, estado
     
     # Extraer ciudad y estado de la columna direccion y guardarda en 2 columnas
-    df_data[['ciudad','estado']] = df_data.apply(lambda x: Ext_Ciudad_Estado(x['address']), axis=1, result_type='expand')
+    df_data[['city','state']] = df_data.apply(lambda x: Ext_Ciudad_Estado(x['address']), axis=1, result_type='expand')
+    lista_estados= ['Florida', 'Pennsylvania', 'Tennessee', 'California', 'Texas', 'New York']
+    df_data= df_data[df_data['state'].isin(lista_estados)]      #Selecionar solo los estados definidos en la lista
 
     #Borrar Columnas
     df_data= df_data.drop(['relative_results','address', 'num_of_reviews', 'description', 'url','category', 'MISC', 'hours'], axis=1) 
     # Ordena el orden de las columnas
-    df_data= df_data[['gmap_id','name', 'ciudad', 'estado', 'latitude', 'longitude', 'avg_rating', 'price', 'state']]
+    df_data= df_data[['gmap_id','name', 'city', 'state', 'latitude', 'longitude', 'avg_rating', 'price']]
+    df_data= df_data.rename(columns={'gmap_id': 'business_id', 'avg_rating': 'stars'}) # cambiar nombre de la columnas
+    df_data['platform']= 1
 
-    print(' ........ TAREAS DE EXTRACION Y TRANSFORMACION COMPLETADAS .....')
+    print(' ........ PROCESO DE TRANSFORMACION COMPLETADO .....')
     return df_data, df_Service_options, df_Planning
 
 
@@ -112,26 +117,26 @@ def Procesar_Data_Sitios(data, context):
     file_name= data['name']
     bucket_name= data['bucket']
     dataset_id= 'BD_Henry'
-    table_id = 'sitios_gmaps'
+    table_id = 'business'
     schema_sitios = [
-        bigquery.SchemaField("gmap_id", bigquery.enums.SqlTypeNames.STRING),
+        bigquery.SchemaField("business_id", bigquery.enums.SqlTypeNames.STRING),
         bigquery.SchemaField("name", bigquery.enums.SqlTypeNames.STRING),
-        bigquery.SchemaField("ciudad", bigquery.enums.SqlTypeNames.STRING),
-        bigquery.SchemaField("estado", bigquery.enums.SqlTypeNames.STRING),
+        bigquery.SchemaField("city", bigquery.enums.SqlTypeNames.STRING),
+        bigquery.SchemaField("state", bigquery.enums.SqlTypeNames.STRING),
         bigquery.SchemaField("latitude", bigquery.enums.SqlTypeNames.FLOAT64),
         bigquery.SchemaField("longitude", bigquery.enums.SqlTypeNames.FLOAT64),
-        bigquery.SchemaField("avg_rating", bigquery.enums.SqlTypeNames.FLOAT64),
+        bigquery.SchemaField("stars", bigquery.enums.SqlTypeNames.FLOAT64),
         bigquery.SchemaField("price", bigquery.enums.SqlTypeNames.STRING),
-        bigquery.SchemaField("state", bigquery.enums.SqlTypeNames.STRING),
+        bigquery.SchemaField("platform", bigquery.enums.SqlTypeNames.STRING),
     ]
 
     schema_service = [
-        bigquery.SchemaField("gmap_id", bigquery.enums.SqlTypeNames.STRING),
+        bigquery.SchemaField("business_id", bigquery.enums.SqlTypeNames.STRING),
         bigquery.SchemaField("service_option", bigquery.enums.SqlTypeNames.STRING),        
     ]
     
     schema_planning = [
-        bigquery.SchemaField("gmap_id", bigquery.enums.SqlTypeNames.STRING),
+        bigquery.SchemaField("business_id", bigquery.enums.SqlTypeNames.STRING),
         bigquery.SchemaField("planning_option", bigquery.enums.SqlTypeNames.STRING),        
     ]
         
@@ -142,6 +147,6 @@ def Procesar_Data_Sitios(data, context):
     
     # Guardas los datos procesados en BigQuery
     Guardar_en_BigQuery(df_procesado, dataset_id, table_id, schema_sitios)
-    Guardar_en_BigQuery(df_Service_options, dataset_id, 'service_sitios', schema_service)
-    Guardar_en_BigQuery(df_Planning, dataset_id, 'planning_sitios', schema_planning)
+    Guardar_en_BigQuery(df_Service_options, dataset_id, 'service_business', schema_service)
+    Guardar_en_BigQuery(df_Planning, dataset_id, 'planning_busines', schema_planning)
 
