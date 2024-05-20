@@ -78,7 +78,7 @@ def Procesar_Data_users_tips_Yelp(data, context):
             bigquery.SchemaField("date", bigquery.enums.SqlTypeNames.DATETIME),
             bigquery.SchemaField("text", bigquery.enums.SqlTypeNames.STRING)            
         ]
-    if file_name == 'user.parquet':
+    else:
         opcion= 2
         table_id = 'users_yelp'
         schema = [
@@ -93,14 +93,12 @@ def Procesar_Data_users_tips_Yelp(data, context):
             bigquery.SchemaField("average_stars", bigquery.enums.SqlTypeNames.FLOAT)
         ] 
 
-    if opcion > 0:   
-        # Carga los archivo a procesar en un dataframe 
-        df_data = Cargar_Data(file_name, bucket_name, opcion)
-        # Realiza las transformaciones y limpieza del archivo y lo devuelve junto con 2 df resultantes
-        df_procesado = Transformar_data(df_data,opcion)
-        # Guardas los datos procesados en BigQuery
-        Guardar_en_BigQuery(df_procesado, dataset_id, table_id, schema)
-    else:
-        print("NO SE ENCUENTRA EL ARCHIVO")
+    # Carga los archivo a procesar en un dataframe 
+    df_data = Cargar_Data(file_name, bucket_name, opcion)
+    # Realiza las transformaciones y limpieza del archivo y lo devuelve junto con 2 df resultantes
+    df_procesado = Transformar_data(df_data,opcion)
+    # Guardas los datos procesados en BigQuery
+    Guardar_en_BigQuery(df_procesado, dataset_id, table_id, schema)
+
 
 
