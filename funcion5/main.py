@@ -3,42 +3,36 @@ from google.cloud import bigquery
 from google.cloud import storage
 import io
 
-def Transformar_data(data, df_estados):
+def Transformar_data(data, df_estados, df_business):
     df_estados= df_estados.rename(columns={'nombre_largo': 'estado', 'nombre_corto':'state'}) # cambiar nombre de la columna
-    df_estados= df_estados.drop(['codigos'], axis=1) # Elimina la columna
+    df_estados= df_estados.drop(['codigos'], axis=1) 
     df_estados['estado']= df_estados['estado'].convert_dtypes(convert_string=True)
     df_estados['estado']= df_estados['estado'].str.strip()  # quita los espacios vacios
 
-    df_data= data
-    df_data['time'] = pd.to_datetime(df_data['time'],unit='ms')     #Transforma la columna de tipo timestamp a formato datetime
-    df_data = df_data[(df_data['time'].dt.year >= 2010) & (df_data['time'].dt.year <= 2021)]
+    # Se cargan los business para filtrar los reviews de la categoria restaurantes solamente
+    df_business = df_business.loc[:, ~df_business.columns.duplicated()]
+    df_business['categories'] = df_business['categories'].str.split(',')
+    df_business= df_business.explode('categories')
+    df_business= df_business.dropna(subset=['categories']) # Elimina datos nulos de la columna
+    df_business['categories']= df_business['categories'].str.strip()    # Elimina los espacios
+    df_business= df_business[df_business['categories']== 'Restaurants']
+    df_business = df_business.merge(df_estados, on='state', how='left')
+
+    lista_estados= ['Florida', 'Pennsylvania', 'Tennessee', 'California', 'Texas', 'New York']
+    df_business= df_business[df_business['estado'].isin(lista_estados)]
+    df_business= df_business[['business_id', 'name']]
     
-    # Se guardan las columnas resp y el gmap_id en un df
-    df_respuestas= df_data[['gmap_id','resp']]
-    df_respuestas= df_respuestas.dropna(subset=['resp']) # Elimina filas con resp nulo
-    df_respuestas= df_respuestas.rename(columns={'gmap_id': 'business_id'})
-
-    # Funcion para cargar los json a una serie de pandas
-    def expandir_diccionario(diccionario):
-        return pd.Series(diccionario)
-
-    # Se concatenas las series al df original
-    df_expandido = pd.concat([df_respuestas, df_respuestas['resp'].apply(expandir_diccionario)], axis=1)
-    df_expandido.drop('resp', axis=1, inplace=True)     # Se elimina la columna de MISC
-    df_expandido['time'] = pd.to_datetime(df_expandido['time'],unit='ms')     #Transforma la columna de tipo timestamp a formato datetime
-    df_respuestas= df_expandido
-
-    df_data= df_data.drop(['pics','resp','name'], axis=1)       #Elimina la columna pics
-    df_data= df_data.rename(columns={'time': 'date', 'gmap_id':'business_id', 'rating':'stars'})
-    df_data[['useful','funny','cool']] = 0
-    df_data['platform']= 1
-
-    df_data['user_id']= df_data['user_id'].astype(str)
+    
+    df_data= data
+    df_data = df_data.merge(df_business, on='business_id', how='inner')
+    df_data = df_data[(df_data['date'].dt.year >= 2010) & (df_data['date'].dt.year <= 2021)]
+    
+    df_data= df_data.drop(['review_id','name'], axis=1)       #Elimina la columna pics
+    df_data['platform']= 2
     df_data= df_data[['business_id','user_id', 'date', 'stars','useful','funny','cool', 'text', 'platform']]
 
-
     print(' ........ PROCESO DE TRANSFORMACION COMPLETADO .....')
-    return df_data, df_respuestas
+    return df_data
 
 
 def Cargar_Data(file_name, bucket_name):
@@ -50,16 +44,19 @@ def Cargar_Data(file_name, bucket_name):
     content = blob.download_as_string()
     
     # Crear un DataFrame de Pandas a partir del contenido del archivo json
-    df_data = pd.read_json(io.BytesIO(content),lines=True)
+    df_data = pd.read_json(io.BytesIO(content))
     
     # Crear Dataframe de pandas con los estados
     blob_estados= bucket.blob('estados_usa.csv')
     df_estados= pd.read_csv(io.BytesIO(blob_estados.download_as_string()), delimiter = ';', encoding = "utf-8")
-    
+
+    # Crear Dataframe de pandas con los business
+    blob_business= bucket.blob('business.pkl')
+    df_business = pd.read_pickle(io.BytesIO(blob_business.download_as_string()))
 
     print(f'... SE HA CARGADO EL ARCHIVO: {file_name} ...')
 
-    return df_data, df_estados
+    return df_data, df_estados, df_business
 
 
 def Guardar_en_BigQuery(data, dataset_id, table_id, schema):
@@ -89,7 +86,7 @@ def Guardar_en_BigQuery(data, dataset_id, table_id, schema):
     return
 
 
-def Procesar_Data_reviews_Gmaps(data, context):
+def Procesar_Data_reviews_Yelp(data, context):
     file_name= data['name']
     bucket_name= data['bucket']
     dataset_id= 'BD_Henry'
@@ -105,16 +102,12 @@ def Procesar_Data_reviews_Gmaps(data, context):
         bigquery.SchemaField("text", bigquery.enums.SqlTypeNames.STRING),
         bigquery.SchemaField("platform", bigquery.enums.SqlTypeNames.INTEGER)
     ]
-    schema_resp = [
-        bigquery.SchemaField("business_id", bigquery.enums.SqlTypeNames.STRING),
-        bigquery.SchemaField("resp", bigquery.enums.SqlTypeNames.STRING)        
-    ]
         
     # Carga los archivo a procesar en un dataframe 
-    df_data, df_estados = Cargar_Data(file_name, bucket_name)
+    df_data, df_estados, df_business = Cargar_Data(file_name, bucket_name)
     # Realiza las transformaciones y limpieza del archivo y lo devuelve junto con 2 df resultantes
-    df_procesado, df_respuestas= Transformar_data(df_data, df_estados)
+    df_procesado = Transformar_data(df_data, df_estados, df_business)
     # Guardas los datos procesados en BigQuery
     Guardar_en_BigQuery(df_procesado, dataset_id, table_id, schema_review)
-    Guardar_en_BigQuery(df_respuestas, dataset_id, 'resp_reviews', schema_resp)
+
 

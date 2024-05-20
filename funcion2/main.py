@@ -113,7 +113,7 @@ def Guardar_en_BigQuery(data, dataset_id, table_id, schema):
     return
 
 
-def Procesar_Data_Sitios(data, context):
+def Procesar_Data_Sitios_Gmaps(data, context):
     file_name= data['name']
     bucket_name= data['bucket']
     dataset_id= 'BD_Henry'
