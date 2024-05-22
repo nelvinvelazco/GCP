@@ -1,0 +1,51 @@
+﻿nombre_largo;nombre_corto;codigos
+Alabama ;AL; 35004 a 36925
+Alaska ;AK; 99501 a 99950
+Arizona ;AZ; 85001 a 86556
+Arkansas ;AR; 71601 a 72959
+California ;CA; 90001 a 96162
+Colorado ;CO; 80001 a 81658
+Connecticut ;CT; 06001 a 06928
+Delaware ;DE; 19701 a 19980
+Florida ;FL; 32003 a 34997
+Georgia ;GA; 30002 a 39901
+Hawái ;HI; 96701 a 96898
+Idaho ;ID; 83201 a 83877
+Illinois ;IL; 60001 a 62999
+Indiana ;IN; 46001 a 47997
+Iowa ;IA; 50001 a 52809
+Kansas ;KS; 66002 a 67954
+Kentucky ;KY; 40003 a 42788
+Louisiana ;LA; 70001 a 71497
+Maine ;ME; 03901 a 04992
+Maryland ;MD; 20588 a 21930
+Massachusetts ;MA; 01001 a 05544
+Michigan ;MI; 48001 a 49971
+Minnesota ;MN; 55001 a 56763
+Mississippi ;MS; 38601 a 39776
+Missouri ;MO; 63001 a 65899
+Montana ;MT; 59001 a 59937
+Nebraska ;NE; 68001 a 69367
+Nevada ;NV; 88901 a 89883
+New Hampshire ;NH; 03031 a 03897
+New Jersey ;NJ; 07001 a 08989
+New Mexico ;NM; 87001 a 88439
+New York ;NY; 00501 a 14925
+North Carolina ;NC; 27006 a 28909
+North Dakota ;ND; 58001 a 58856
+Ohio ;OH; 43001 a 45999
+Oklahoma ;OK; 73001 a 74966
+Oregon ;OR; 97001 a 97920
+Pennsylvania ;PA; 15001 a 19640
+Rhode Island ;RI; 02801 a 02940
+South Carolina ;SC; 29001 a 29945
+South Dakota ;SD; 57001 a 57799
+Tennessee ;TN; 37010 a 38589
+Texas ;TX; 73301 a 88595
+Utah ;UT; 84001 a 84791
+Vermont ;VT; 05001 a 05907
+Virginia ;VA; 20101 a 24658
+Washington ;WA; 98001 a 99403
+West Virginia ;WV; 24701 a 26886
+Wisconsin ;WI; 53001 a 54990
+Wyoming ;WY; 82001 a 83414.
