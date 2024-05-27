@@ -127,13 +127,13 @@ def Procesar_Data_Business(data, context):
 
     schema_atributos = [
         bigquery.SchemaField("business_id", bigquery.enums.SqlTypeNames.STRING),
-        bigquery.SchemaField("Delivery", bigquery.enums.SqlTypeNames.STRING),
+        bigquery.SchemaField("RestaurantsDelivery", bigquery.enums.SqlTypeNames.STRING),
         bigquery.SchemaField("OutdoorSeating", bigquery.enums.SqlTypeNames.STRING),
-        bigquery.SchemaField("AcceptsCreditCards", bigquery.enums.SqlTypeNames.STRING),
+        bigquery.SchemaField("BusinessAcceptsCreditCards", bigquery.enums.SqlTypeNames.STRING),
         bigquery.SchemaField("GoodForKids", bigquery.enums.SqlTypeNames.STRING),
-        bigquery.SchemaField("PriceRange2", bigquery.enums.SqlTypeNames.STRING),
-        bigquery.SchemaField("TakeOut", bigquery.enums.SqlTypeNames.STRING),
-        bigquery.SchemaField("Reservations", bigquery.enums.SqlTypeNames.STRING),
+        bigquery.SchemaField("RestaurantsPriceRange2", bigquery.enums.SqlTypeNames.STRING),
+        bigquery.SchemaField("RestaurantsTakeOut", bigquery.enums.SqlTypeNames.STRING),
+        bigquery.SchemaField("RestaurantsReservations", bigquery.enums.SqlTypeNames.STRING),
         bigquery.SchemaField("HasTV", bigquery.enums.SqlTypeNames.STRING),
     ]
 

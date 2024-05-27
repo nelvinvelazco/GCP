@@ -19,13 +19,10 @@ def Transformar_data(data, df_estados, df_business):
     df_business= df_business.dropna(subset=['state']) # Elimina datos nulos de la columna
     df_business['state']= df_business['state'].str.strip()  # quita los espacios vacios
     df_business = df_business.merge(df_estados, on='state', how='left')     # Se hace un join con estados para sacar el nombre largo del estado
-    df_business= df_business.drop(['state'], axis=1)    # Borra la columna
-    df_business= df_business.rename(columns={'estado': 'state'}) # cambiar nombre de la columna
-    df_business= df_business.dropna(subset=['state']) # Elimina datos nulos de la columna
-    lista_estados= ['Florida', 'Pennsylvania', 'Tennessee', 'California', 'Texas', 'New York']
-    df_business= df_business[df_business['state'].isin(lista_estados)]
-    df_business= df_business[['business_id', 'name']]
 
+    lista_estados= ['Florida', 'Pennsylvania', 'Tennessee', 'California', 'Texas', 'New York']
+    df_business= df_business[df_business['estado'].isin(lista_estados)]
+    df_business= df_business[['business_id', 'name']]
     
     df_data= data
     df_data = df_data.merge(df_business, on='business_id', how='inner')
