@@ -11,12 +11,14 @@ def Transformar_data(data, df_estados):
 
     df_data= data
     df_data = df_data.loc[:, ~df_data.columns.duplicated()]
-    df_data['categories'] = df_data['categories'].str.split(',')
-    df_data= df_data.explode('categories')
-    df_data= df_data.dropna(subset=['categories']) # Elimina datos nulos de la columna
-    df_data['categories']= df_data['categories'].str.strip()    # Elimina los espacios
+    df_data.drop_duplicates('business_id',inplace=True)
 
-    df_data= df_data[df_data['categories']== 'Restaurants']     #Filtra por la categoria Restaurantes
+    df_data['categories'] = df_data['categories'].str.split(',')
+    df_data= df_data.dropna(subset=['categories']) # Elimina datos nulos de la columna
+
+    df_data['Es_Restaurant'] = df_data['categories'].apply(lambda x: 'Restaurants' in x)
+    df_data= df_data[df_data['Es_Restaurant']]
+
     df_data= df_data.dropna(subset=['state']) # Elimina datos nulos de la columna
     df_data['state']= df_data['state'].str.strip()  # quita los espacios vacios
 
@@ -27,13 +29,30 @@ def Transformar_data(data, df_estados):
 
     lista_estados= ['Florida', 'Pennsylvania', 'Tennessee', 'California', 'Texas', 'New York']
     df_data= df_data[df_data['state'].isin(lista_estados)]
+
+    df_category= df_data[['business_id','categories']]
+    df_category= df_category.explode('categories')
+    df_category= df_category.dropna(subset=['categories']) # Elimina datos nulos de la columna
+    df_category['categories']= df_category['categories'].str.strip()    # Elimina los espacios
+    df_category= df_category.rename(columns={'categories': 'category_name'}) # cambiar nombre de las columnas
+
+    df_atributes= df_data[['business_id','attributes']]
+    def expandir_diccionario(diccionario):
+        return pd.Series(diccionario)
+    df_expandido = pd.concat([df_atributes, df_atributes['attributes'].apply(expandir_diccionario)], axis=1)
+    df_expandido.drop('attributes', axis=1, inplace=True)     # Se elimina la columna de MISC
+    df_atributes= df_expandido
+    df_atributes = df_atributes[['business_id','RestaurantsDelivery','OutdoorSeating','BusinessAcceptsCreditCards','GoodForKids',
+                             'RestaurantsPriceRange2','RestaurantsTakeOut','RestaurantsReservations','HasTV']]
+    df_atributes= df_atributes.fillna('None')     # Se imputan los valores nulos a 'None'
+
     df_data= df_data.drop(['address','postal_code', 'review_count', 'is_open', 'attributes','categories', 'hours'], axis=1)
     df_data= df_data[['business_id','name', 'city', 'state', 'latitude', 'longitude', 'stars']]
     df_data['price'] = "SIN DATO"
     df_data['platform'] = 2
 
     print(' ........ PROCESO DE TRANSFORMACION COMPLETADO .....')
-    return df_data
+    return df_data, df_category, df_atributes
 
 
 def Cargar_Data(file_name, bucket_name):
@@ -100,11 +119,31 @@ def Procesar_Data_Business(data, context):
         bigquery.SchemaField("price", bigquery.enums.SqlTypeNames.STRING),
         bigquery.SchemaField("platform", bigquery.enums.SqlTypeNames.STRING),
     ]
+
+    schema_category = [
+        bigquery.SchemaField("business_id", bigquery.enums.SqlTypeNames.STRING),
+        bigquery.SchemaField("category_name", bigquery.enums.SqlTypeNames.STRING),
+    ]
+
+    schema_atributos = [
+        bigquery.SchemaField("business_id", bigquery.enums.SqlTypeNames.STRING),
+        bigquery.SchemaField("Delivery", bigquery.enums.SqlTypeNames.STRING),
+        bigquery.SchemaField("OutdoorSeating", bigquery.enums.SqlTypeNames.STRING),
+        bigquery.SchemaField("AcceptsCreditCards", bigquery.enums.SqlTypeNames.STRING),
+        bigquery.SchemaField("GoodForKids", bigquery.enums.SqlTypeNames.STRING),
+        bigquery.SchemaField("PriceRange2", bigquery.enums.SqlTypeNames.STRING),
+        bigquery.SchemaField("TakeOut", bigquery.enums.SqlTypeNames.STRING),
+        bigquery.SchemaField("Reservations", bigquery.enums.SqlTypeNames.STRING),
+        bigquery.SchemaField("HasTV", bigquery.enums.SqlTypeNames.STRING),
+    ]
+
         
     # Carga los archivo a procesar en un dataframe 
     df_data, df_estados = Cargar_Data(file_name, bucket_name)
     # Realiza las transformaciones y limpieza del archivo y lo devuelve junto con 2 df resultantes
-    df_procesado= Transformar_data(df_data, df_estados)
+    df_procesado, df_category, df_atributes = Transformar_data(df_data, df_estados)
     # Guardas los datos procesados en BigQuery
     Guardar_en_BigQuery(df_procesado, dataset_id, table_id, schema_sitios)
+    Guardar_en_BigQuery(df_category, dataset_id, 'category_business', schema_category)
+    Guardar_en_BigQuery(df_atributes, dataset_id, 'attributes_business', schema_atributos)
 

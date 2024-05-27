@@ -11,17 +11,21 @@ def Transformar_data(data, df_estados, df_business):
 
     # Se cargan los business para filtrar los reviews de la categoria restaurantes solamente
     df_business = df_business.loc[:, ~df_business.columns.duplicated()]
+    df_business.drop_duplicates('business_id',inplace=True)
     df_business['categories'] = df_business['categories'].str.split(',')
-    df_business= df_business.explode('categories')
     df_business= df_business.dropna(subset=['categories']) # Elimina datos nulos de la columna
-    df_business['categories']= df_business['categories'].str.strip()    # Elimina los espacios
-    df_business= df_business[df_business['categories']== 'Restaurants']
-    df_business = df_business.merge(df_estados, on='state', how='left')
-
+    df_business['Es_Restaurant'] = df_business['categories'].apply(lambda x: 'Restaurants' in x)
+    df_business= df_business[df_business['Es_Restaurant']]
+    df_business= df_business.dropna(subset=['state']) # Elimina datos nulos de la columna
+    df_business['state']= df_business['state'].str.strip()  # quita los espacios vacios
+    df_business = df_business.merge(df_estados, on='state', how='left')     # Se hace un join con estados para sacar el nombre largo del estado
+    df_business= df_business.drop(['state'], axis=1)    # Borra la columna
+    df_business= df_business.rename(columns={'estado': 'state'}) # cambiar nombre de la columna
+    df_business= df_business.dropna(subset=['state']) # Elimina datos nulos de la columna
     lista_estados= ['Florida', 'Pennsylvania', 'Tennessee', 'California', 'Texas', 'New York']
-    df_business= df_business[df_business['estado'].isin(lista_estados)]
+    df_business= df_business[df_business['state'].isin(lista_estados)]
     df_business= df_business[['business_id', 'name']]
-    
+
     
     df_data= data
     df_data = df_data.merge(df_business, on='business_id', how='inner')

@@ -5,11 +5,41 @@ import io
 
 def Transformar_data(data, df_estados):
     df_data= data
+    df_data.drop_duplicates('gmap_id',inplace=True)
     df_data= df_data.dropna(subset=['address']) # Elimina filas con address nulas
     df_data= df_data.dropna(subset=['category']) # Elimina filas con category nulas
-    df_data= df_data.explode('category')
-    df_data= df_data[df_data['category'] == "Restaurant"]
+
+    # Crea una columna re ddice si la categoria es "Restaurant" o no
+    df_data['Es_Restaurant'] = df_data['category'].apply(lambda x: 'Restaurant' in x)
+    df_data= df_data[df_data['Es_Restaurant']]
     df_data= df_data.fillna({'price':'SIN DATO', 'state':'SIN DATO'})     # Se imputan los valores nulos a 'SIN DATO'
+
+    # En pruebas se detecto que esta fila estaba dando problemas con la funcion para extraer, asi que se procede a eliminarla
+    df_data= df_data[df_data['address'] != "〒10028 New York, Lexington Ave, (New) Ichie Japanese Restaurant"]
+
+    # Funcion para sacar cuidad y estado de la direccion
+    def Ext_Ciudad_Estado(dir):
+        ciudad= "SIN DATO"
+        estado= "SIN DATO"     
+        if len(str(dir)) > 10:  
+            lista= str(dir).split(',')
+            if len(lista) > 2:
+                codigo= lista[-1][1:3]
+                df_filtro= df_estados[df_estados['nombre_corto'].str.contains(codigo)]        
+                if not df_filtro.empty:            
+                    ciudad = lista[-2].strip()
+                    estado= df_filtro.nombre_largo.values[0].strip()
+        return ciudad, estado
+    
+    # Extraer ciudad y estado de la columna direccion y guardarda en 2 columnas
+    df_data[['city','state']] = df_data.apply(lambda x: Ext_Ciudad_Estado(x['address']), axis=1, result_type='expand')
+    lista_estados= ['Florida', 'Pennsylvania', 'Tennessee', 'California', 'Texas', 'New York']
+    df_data= df_data[df_data['state'].isin(lista_estados)]      #Selecionar solo los estados definidos en la lista
+
+    # Se guardan las columnas categorias y el gmap_id en un df
+    df_category= df_data[['gmap_id','category']]  
+    df_category= df_category.explode('category')
+    df_category= df_category.rename(columns={'gmap_id': 'business_id','category': 'category_name'}) # cambiar nombre de las columnas
 
     # Se guardan las columnas MISC y el gmap_id en un df
     df_misc= df_data[['gmap_id','MISC']]
@@ -34,27 +64,6 @@ def Transformar_data(data, df_estados):
     df_Planning= df_Planning.dropna(subset=['planning_option']) # Elimina filas con columna 'Service Opciones nulas'
     df_Planning= df_Planning.explode('planning_option')
 
-    # En pruebas se detecto que esta fila estaba dando problemas con la funcion para extraer, asi que se procede a eliminarla
-    df_data= df_data[df_data['address'] != "〒10028 New York, Lexington Ave, (New) Ichie Japanese Restaurant"]
-
-    def Ext_Ciudad_Estado(dir):
-        ciudad= "SIN DATO"
-        estado= "SIN DATO"     
-        if len(str(dir)) > 10:  
-            lista= str(dir).split(',')
-            if len(lista) > 2:
-                codigo= lista[-1][1:3]
-                df_filtro= df_estados[df_estados['nombre_corto'].str.contains(codigo)]        
-                if not df_filtro.empty:            
-                    ciudad = lista[-2].strip()
-                    estado= df_filtro.nombre_largo.values[0].strip()
-        return ciudad, estado
-    
-    # Extraer ciudad y estado de la columna direccion y guardarda en 2 columnas
-    df_data[['city','state']] = df_data.apply(lambda x: Ext_Ciudad_Estado(x['address']), axis=1, result_type='expand')
-    lista_estados= ['Florida', 'Pennsylvania', 'Tennessee', 'California', 'Texas', 'New York']
-    df_data= df_data[df_data['state'].isin(lista_estados)]      #Selecionar solo los estados definidos en la lista
-
     #Borrar Columnas
     df_data= df_data.drop(['relative_results','address', 'num_of_reviews', 'description', 'url','category', 'MISC', 'hours'], axis=1) 
     # Ordena el orden de las columnas
@@ -63,7 +72,7 @@ def Transformar_data(data, df_estados):
     df_data['platform']= 1
 
     print(' ........ PROCESO DE TRANSFORMACION COMPLETADO .....')
-    return df_data, df_Service_options, df_Planning
+    return df_data, df_category, df_Service_options, df_Planning
 
 
 def Cargar_Data(file_name, bucket_name):
@@ -130,6 +139,11 @@ def Procesar_Data_Sitios_Gmaps(data, context):
         bigquery.SchemaField("platform", bigquery.enums.SqlTypeNames.STRING),
     ]
 
+    schema_category = [
+        bigquery.SchemaField("business_id", bigquery.enums.SqlTypeNames.STRING),
+        bigquery.SchemaField("category_name", bigquery.enums.SqlTypeNames.STRING),        
+    ]
+
     schema_service = [
         bigquery.SchemaField("business_id", bigquery.enums.SqlTypeNames.STRING),
         bigquery.SchemaField("service_option", bigquery.enums.SqlTypeNames.STRING),        
@@ -143,10 +157,11 @@ def Procesar_Data_Sitios_Gmaps(data, context):
     # Carga los archivo a procesar en un dataframe 
     df_data, df_estados = Cargar_Data(file_name, bucket_name)
     # Realiza las transformaciones y limpieza del archivo y lo devuelve junto con 2 df resultantes
-    df_procesado, df_Service_options, df_Planning= Transformar_data(df_data, df_estados)
+    df_procesado, df_category, df_Service_options, df_Planning= Transformar_data(df_data, df_estados)
     
     # Guardas los datos procesados en BigQuery
     Guardar_en_BigQuery(df_procesado, dataset_id, table_id, schema_sitios)
+    Guardar_en_BigQuery(df_category, dataset_id, 'category_business', schema_category)
     Guardar_en_BigQuery(df_Service_options, dataset_id, 'service_business', schema_service)
     Guardar_en_BigQuery(df_Planning, dataset_id, 'planning_busines', schema_planning)
 
