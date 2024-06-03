@@ -53,3 +53,15 @@ gcloud functions deploy Procesar_Data_reviews_Yelp
 --trigger-event google.storage.object.finalize
 
 gcloud functions deploy Procesar_Data_reviews_Yelp --runtime python311 --region southamerica-east1 --trigger-resource "reviews_yelp1" --memory 8192MB --trigger-event google.storage.object.finalize
+
+
+-------------------------- Crear un Servicio con cloud run -----------------------------------------
+gcloud builds submit --tag gcr.io/proyectohenry2/fastapi-app
+
+gcloud run deploy fastapi-app \
+  --image gcr.io/proyectohenry2/fastapi-app \
+  --platform managed \
+  --region us-central1 \
+  --allow-unauthenticated
+
+gcloud run deploy fastapi-app --image gcr.io/proyectohenry2/fastapi-app --platform managed --region us-central1 --allow-unauthenticated  

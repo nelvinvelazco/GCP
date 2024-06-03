@@ -10,6 +10,7 @@ def Transformar_data(data, opcion):
         df_data= df_data.drop(['compliment_count'], axis=1)       #Elimina la columnas
         df_data= df_data[['business_id','user_id', 'date','text']]
     else:
+        df_data.drop_duplicates('user_id',inplace=True)
         df_data= df_data.drop(['elite', 'friends', 'compliment_hot', 'compliment_more', 'compliment_profile', 
                                 'compliment_cute', 'compliment_list', 'compliment_note', 'compliment_plain', 
                                 'compliment_cool', 'compliment_funny', 'compliment_writer','compliment_photos'], axis=1)

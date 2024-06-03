@@ -40,6 +40,7 @@ def Transformar_data(data, df_estados):
     df_category= df_data[['gmap_id','category']]  
     df_category= df_category.explode('category')
     df_category= df_category.rename(columns={'gmap_id': 'business_id','category': 'category_name'}) # cambiar nombre de las columnas
+    df_category['platform']= 1
 
     # Se guardan las columnas MISC y el gmap_id en un df
     df_misc= df_data[['gmap_id','MISC']]
@@ -125,7 +126,7 @@ def Guardar_en_BigQuery(data, dataset_id, table_id, schema):
 def Procesar_Data_Sitios_Gmaps(data, context):
     file_name= data['name']
     bucket_name= data['bucket']
-    dataset_id= 'BD_Henry'
+    dataset_id= 'DB_Gmaps_Yelp'
     table_id = 'business'
     schema_sitios = [
         bigquery.SchemaField("business_id", bigquery.enums.SqlTypeNames.STRING),
@@ -136,12 +137,13 @@ def Procesar_Data_Sitios_Gmaps(data, context):
         bigquery.SchemaField("longitude", bigquery.enums.SqlTypeNames.FLOAT64),
         bigquery.SchemaField("stars", bigquery.enums.SqlTypeNames.FLOAT64),
         bigquery.SchemaField("price", bigquery.enums.SqlTypeNames.STRING),
-        bigquery.SchemaField("platform", bigquery.enums.SqlTypeNames.STRING),
+        bigquery.SchemaField("platform", bigquery.enums.SqlTypeNames.INTEGER),
     ]
 
     schema_category = [
         bigquery.SchemaField("business_id", bigquery.enums.SqlTypeNames.STRING),
-        bigquery.SchemaField("category_name", bigquery.enums.SqlTypeNames.STRING),        
+        bigquery.SchemaField("category_name", bigquery.enums.SqlTypeNames.STRING),
+        bigquery.SchemaField("platform", bigquery.enums.SqlTypeNames.INTEGER),        
     ]
 
     schema_service = [

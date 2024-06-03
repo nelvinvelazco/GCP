@@ -3,32 +3,16 @@ from google.cloud import bigquery
 from google.cloud import storage
 import io
 
-def Transformar_data(data, df_estados):
-    df_estados= df_estados.rename(columns={'nombre_largo': 'estado', 'nombre_corto':'state'}) # cambiar nombre de la columna
-    df_estados= df_estados.drop(['codigos'], axis=1) # Elimina la columna
-    df_estados['estado']= df_estados['estado'].convert_dtypes(convert_string=True)
-    df_estados['estado']= df_estados['estado'].str.strip()  # quita los espacios vacios
-
+def Transformar_data(data):
     df_data= data
-    df_data = df_data.loc[:, ~df_data.columns.duplicated()]
-    df_data.drop_duplicates('business_id',inplace=True)
-
+    
     df_data['categories'] = df_data['categories'].str.split(',')
     df_data= df_data.dropna(subset=['categories']) # Elimina datos nulos de la columna
 
-    df_data['Es_Restaurant'] = df_data['categories'].apply(lambda x: 'Restaurants' in x)
-    df_data= df_data[df_data['Es_Restaurant']]
-
-    df_data= df_data.dropna(subset=['state']) # Elimina datos nulos de la columna
-    df_data['state']= df_data['state'].str.strip()  # quita los espacios vacios
-
-    df_data = df_data.merge(df_estados, on='state', how='left')     # Se hace un join con estados para sacar el nombre largo del estado
-    df_data= df_data.drop(['state'], axis=1)    # Borra la columna
-    df_data= df_data.rename(columns={'estado': 'state'}) # cambiar nombre de la columna
-    df_data= df_data.dropna(subset=['state']) # Elimina datos nulos de la columna
+    df_data['estado']= df_data['estado'].str.strip()  # quita los espacios vacios
 
     lista_estados= ['Florida', 'Pennsylvania', 'Tennessee', 'California', 'Texas', 'New York']
-    df_data= df_data[df_data['state'].isin(lista_estados)]
+    df_data= df_data[df_data['estado'].isin(lista_estados)]
 
     df_category= df_data[['business_id','categories']]
     df_category= df_category.explode('categories')
@@ -47,11 +31,13 @@ def Transformar_data(data, df_estados):
                              'RestaurantsPriceRange2','RestaurantsTakeOut','RestaurantsReservations','HasTV']]
     df_atributes= df_atributes.fillna('None')     # Se imputan los valores nulos a 'None'
 
-    df_data= df_data.drop(['address','postal_code', 'review_count', 'is_open', 'attributes','categories', 'hours'], axis=1)
-    df_data= df_data[['business_id','name', 'city', 'state', 'latitude', 'longitude', 'stars']]
+    #Borrar Columnas
+    df_data= df_data.drop(['address','postal_code', 'review_count', 'is_open', 'attributes','categories', 'hours','state','city'], axis=1)
+    df_data= df_data[['business_id','name', 'ciudad', 'estado', 'latitude', 'longitude', 'stars']]
+    df_data= df_data.rename(columns={'ciudad': 'city','estado': 'state'}) # cambiar nombre de las columnas
     df_data['price'] = "SIN DATO"
     df_data['platform'] = 2
-
+    
     print(' ........ PROCESO DE TRANSFORMACION COMPLETADO .....')
     return df_data, df_category, df_atributes
 
@@ -65,16 +51,10 @@ def Cargar_Data(file_name, bucket_name):
     content = blob.download_as_string()
     
     # Crear un DataFrame de Pandas a partir del contenido del archivo json
-    df_data = pd.read_pickle(io.BytesIO(content))
+    df_data = pd.read_parquet(io.BytesIO(content))
     
-    # Crear Dataframe de pandas con los estados
-    blob_estados= bucket.blob('estados_usa.csv')
-    df_estados= pd.read_csv(io.BytesIO(blob_estados.download_as_string()), delimiter = ';', encoding = "utf-8")
-    
-
     print(f'... SE HA CARGADO EL ARCHIVO: {file_name} ...')
-
-    return df_data, df_estados
+    return df_data
 
 
 def Guardar_en_BigQuery(data, dataset_id, table_id, schema):
@@ -141,9 +121,9 @@ def Procesar_Data_Business(data, context):
 
         
     # Carga los archivo a procesar en un dataframe 
-    df_data, df_estados = Cargar_Data(file_name, bucket_name)
+    df_data = Cargar_Data(file_name, bucket_name)
     # Realiza las transformaciones y limpieza del archivo y lo devuelve junto con 2 df resultantes
-    df_procesado, df_category, df_atributes = Transformar_data(df_data, df_estados)
+    df_procesado, df_category, df_atributes = Transformar_data(df_data)
     # Guardas los datos procesados en BigQuery
     Guardar_en_BigQuery(df_procesado, dataset_id, table_id, schema_sitios)
     Guardar_en_BigQuery(df_category, dataset_id, 'category_business', schema_category)
