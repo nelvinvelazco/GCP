@@ -1,17 +1,20 @@
-# Use an official Python runtime as a parent image
+# Usa una imagen base oficial de Python como base
 FROM python:3.9-slim
 
-# Set the working directory in the container
+# Establece el directorio de trabajo en el contenedor
 WORKDIR /app
 
-# Copy the current directory contents into the container at /app
-COPY . /app
+# Copia los archivos de requisitos en el directorio de trabajo
+COPY requirements.txt .
 
-# Install FastAPI and Uvicorn
-RUN pip install fastapi uvicorn
+# Instala las dependencias
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Make port 8080 available to the world outside this container
+# Copia el resto del código de la aplicación en el directorio de trabajo
+COPY . .
+
+# Exponer el puerto en el que la app correrá
 EXPOSE 8080
 
-# Run app.py when the container launches
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8081"]
+# Comando para correr la aplicación
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
