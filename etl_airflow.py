@@ -7,40 +7,51 @@ import io
 
 # Configuración del DAG
 default_args = {
-    'owner': 'airflow',
-    'depends_on_past': False,
+    'owner': 'Nelvin Velazco',
     'start_date': datetime(2023, 1, 1),
-    'email_on_failure': False,
-    'email_on_retry': False,
     'retries': 1,
-    'retry_delay': timedelta(minutes=5),
+    'retry_delay': timedelta(minutes=2),
 }
 
 
 dag = DAG(
-    'gcs_to_bigquery_etl_with_date',
+    'Test_ETL_GCP',
     default_args=default_args,
-    description='ETL pipeline from GCS to BigQuery with dynamic filename',
+    description='ETL para cargar un archivo de una bucket, procesarlo y guardarlo en BigQuery',
     schedule_interval=None,  # No scheduling interval
     catchup=False,  # Prevent backfilling
 )
 
+BUCKET_NAME= 'gmaps_data2'
+DATASET_NAME= 'db_test'
+storage_client = storage.Client()
+schema_busines = [
+        bigquery.SchemaField("business_id", bigquery.enums.SqlTypeNames.STRING),
+        bigquery.SchemaField("name", bigquery.enums.SqlTypeNames.STRING),
+        bigquery.SchemaField("city", bigquery.enums.SqlTypeNames.STRING),
+        bigquery.SchemaField("state", bigquery.enums.SqlTypeNames.STRING),
+        bigquery.SchemaField("latitude", bigquery.enums.SqlTypeNames.FLOAT64),
+        bigquery.SchemaField("longitude", bigquery.enums.SqlTypeNames.FLOAT64),
+        bigquery.SchemaField("stars", bigquery.enums.SqlTypeNames.FLOAT64),
+        bigquery.SchemaField("price", bigquery.enums.SqlTypeNames.STRING),
+        bigquery.SchemaField("platform", bigquery.enums.SqlTypeNames.INTEGER),
+    ]
+
 # Función de transformación
-def transform_data(**kwargs):
-    storage_client = storage.Client()
+def transformar_data(**kwargs):
     file_name= '1.json'
-    bucket_name= 'gmaps_data2'
     # Descargar el archivo CSV desde GCS
-    bucket = storage_client.bucket(bucket_name)
+    bucket = storage_client.bucket(BUCKET_NAME)
     blob = bucket.blob(file_name)
     content = blob.download_as_string()
     
     # Crear un DataFrame de Pandas a partir del contenido del archivo json
-    df_data = pd.read_json(io.BytesIO(content),lines=True)
+    df_data = pd.read_json(io.StringIO(content.decode('utf-8')),lines=True)
     
     # Crear Dataframe de pandas con los estados
     blob_estados= bucket.blob('estados_usa.csv')
     df_estados= pd.read_csv(io.BytesIO(blob_estados.download_as_string()), delimiter = ';', encoding = "utf-8") 
+
     df_data.drop_duplicates('gmap_id',inplace=True)
     df_data= df_data.dropna(subset=['address']) # Elimina filas con address nulas
     df_data= df_data.dropna(subset=['category']) # Elimina filas con category nulas
@@ -80,31 +91,58 @@ def transform_data(**kwargs):
     print(' ........ PROCESO DE TRANSFORMACION COMPLETADO .....')
 
     #####################################################################
-    file_name = f'transformed_data_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
-    blob2 = bucket.blob(file_name)
+    data_procesada = f'temp/transformed_data_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+    blob2 = bucket.blob(data_procesada)
     csv_buffer = io.StringIO()
     df_data.to_csv(csv_buffer, index=False)
     csv_buffer.seek(0)
-    blob2.upload_from_string(csv_buffer.getvalue(), content_type='text/csv')   
+    blob2.upload_from_string(csv_buffer.getvalue(), content_type='text/csv')
+    kwargs['ti'].xcom_push(key='archivo_procesado', value= data_procesada)   
+
+def guardar_BigQuery(**kwargs):
+    file_name = kwargs['ti'].xcom_pull(key='archivo_procesado', task_ids='extraer_y_transformar')
+    bucket2 = storage_client.bucket(BUCKET_NAME)
+    blob_csv= bucket2.blob(file_name)
+    data= pd.read_csv(io.BytesIO(blob_csv.download_as_string()), delimiter = ',', encoding = "utf-8")
+
+    TABLE_ID = 'business'
+    bigquery_client = bigquery.Client()
+    table_ref = bigquery_client.dataset(DATASET_NAME).table(TABLE_ID)
+    try:
+        tabla = bigquery_client.get_table(table_ref)
+        tabla_existe = True
+    except:
+        tabla_existe = False
+
+    if tabla_existe:
+        print(f'----- La tabla {TABLE_ID} ya existe en el dataset {DATASET_NAME} -----')
+    else:
+        print(f'----- La tabla {TABLE_ID} no existe en el dataset {DATASET_NAME} -----')
+        # Crear la tabla si no existe
+        tabla = bigquery.Table(table_ref, schema=schema_busines)
+        tabla = bigquery_client.create_table(tabla)
+        print(f'----- Se ha creado la tabla {TABLE_ID} en el dataset {DATASET_NAME} -----')
+        
+    # Agregar los registros de data a la tabla existente o recién creada
+    job_config = bigquery.LoadJobConfig()
+    job_config.write_disposition = bigquery.WriteDisposition.WRITE_APPEND if tabla_existe else bigquery.WriteDisposition.WRITE_TRUNCATE
+    job = bigquery_client.load_table_from_dataframe(data, table_ref, job_config=job_config)
+    job.result()
+    print(f'----- REGISTROS AGREGADOS CORRECTAMENTE EN: {TABLE_ID} -------') 
 
 # Tareas del DAG
-extract_y_transform = PythonOperator(
-    task_id='extract_and_transform',
-    python_callable=transform_data,
+extraer_y_transformar = PythonOperator(
+    task_id='extraer_y_transformar',
+    python_callable=transformar_data,
     provide_context=True,
     dag=dag,
 )
 
-"""load_to_bq = GCSToBigQueryOperator(
-    task_id='load_to_bq',
-    bucket='your-bucket-name',
-    source_objects=['path/to/transformed_data.csv'],
-    destination_project_dataset_table='your-project.your_dataset.your_table',
-    source_format='CSV',
-    skip_leading_rows=1,
-    write_disposition='WRITE_TRUNCATE',
+cargar_en_BigQuery = PythonOperator(
+    task_id='Cargar_en_BigQuery',
+    python_callable=guardar_BigQuery,
+    provide_context=True,
     dag=dag,
-)"""
+)
 
-extract_y_transform
-#extract_transform >> load_to_bq
+extraer_y_transformar >> cargar_en_BigQuery
