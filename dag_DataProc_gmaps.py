@@ -16,7 +16,7 @@ default_args = {
 }
 
 dag = DAG(
-    'dataproc_gcs_to_bq',
+    'ETL_pyspark_gmaps',
     default_args=default_args,
     description='DAG que crea un clúster de Dataproc, ejecuta un job de PySpark y carga datos en BigQuery',
     schedule_interval=None,
@@ -34,18 +34,18 @@ TEMP_BUCKET_NAME = 'gmaps_data2'
 #BQ_DATASET = Variable.get('bq_dataset')
 BQ_DATASET = 'db_test'
 #BQ_TABLE = Variable.get('bq_table')
-BQ_TABLE = 'estados_usa2'
+BQ_TABLE = 'business2'
 
 # Define the job configuration
 job_config = {
     "reference": {"project_id": PROJECT_ID},
     "placement": {"cluster_name": CLUSTER_NAME},
     "pyspark_job": {        
-        "main_python_file_uri": f"gs://{BUCKET_NAME}/pyspark_job.py",
+        "main_python_file_uri": f"gs://{BUCKET_NAME}/pyspark_job_gmaps.py",
         'jar_file_uris': ['gs://spark-lib/bigquery/spark-bigquery-latest_2.12.jar',                            
                             'gs://spark-lib/bigquery/spark-bigquery-with-dependencies_2.12-0.23.2.jar'],        
         "args": [
-            f"gs://{BUCKET_NAME}/estados_usa.csv",
+            f"gs://{BUCKET_NAME}/1.json",
             BQ_DATASET,
             BQ_TABLE,
             TEMP_BUCKET_NAME

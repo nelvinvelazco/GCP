@@ -30,10 +30,7 @@ df.write.format('bigquery') \
     .option('temporaryGcsBucket', temporary_gcs_bucket) \
     .option('createDisposition', 'CREATE_IF_NEEDED') \
     .option('writeDisposition', 'WRITE_TRUNCATE') \
+    .mode('append') \
     .save()
-    
-    #.mode('append') \
-    #.option('createDisposition', 'CREATE_IF_NEEDED') \
-    #.option('writeDisposition', 'WRITE_TRUNCATE') \
 
 spark.stop()
