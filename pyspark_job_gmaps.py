@@ -1,6 +1,6 @@
 import sys
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, whenfrom, array_contains
+from pyspark.sql.functions import col, array_contains, lower, explode, collect_list, trim
 
 # Argumentos
 gcs_input_path = sys.argv[1]
@@ -16,17 +16,19 @@ spark = SparkSession.builder \
 spark.conf.set('temporaryGcsBucket', temporary_gcs_bucket)
 
 # Leer datos desde GCS
-df_data = spark.read.json(gcs_input_path, multiLine=True)
+df_data = spark.read.json(gcs_input_path)
+
+print(f"Total de filas: {df_data.count()}")
 df_data = df_data.dropDuplicates(['gmap_id'])
 df_data = df_data.dropna(subset=['address'])
 df_data = df_data.dropna(subset=['category'])
-df_data = df_data.withColumn('Es_Restaurant', array_contains(col('category'), 'Restaurant'))
-df_data = df_data.filter(col('Es_Restaurant') == True)
-df_data = df_data.fillna({'price': 'SIN DATO', 'state': 'SIN DATO'})
-df_data = df_data.drop('relative_results', 'address', 'num_of_reviews', 'description', 'url', 'category', 'MISC', 'hours')
+print(f"Total de filas: {df_data.count()}")
 
+df_data = df_data.drop('relative_results', 'address', 'num_of_reviews', 'description', 'url', 'MISC', 'hours')
+print(f"Total de filas: {df_data.count()}")
 df_data.printSchema()
 df_data.show()
+
 
 
 # Escribir datos en BigQuery
