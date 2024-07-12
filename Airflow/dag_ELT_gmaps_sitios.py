@@ -1,4 +1,5 @@
 from airflow import DAG
+from datetime import datetime
 from airflow.utils.dates import days_ago
 from airflow.providers.google.cloud.operators.dataproc import (
     DataprocCreateClusterOperator,
@@ -23,32 +24,38 @@ dag = DAG(
 )
 
 # Configuración del clúster
-CLUSTER_NAME = 'dataproc-cluster'
-REGION = 'southamerica-east1'
+
+#REGION = 'southamerica-east1'
 #PROJECT_ID = Variable.get('project_id')
-PROJECT_ID = 'proyectohenry2'
 #BUCKET_NAME = Variable.get('gcs_bucket')
-BUCKET_NAME = 'gmaps_data2'
-TEMP_BUCKET_NAME = 'gmaps_data2'
 #TEMP_BUCKET_NAME = Variable.get('gcs_temp_bucket')
 #BQ_DATASET = Variable.get('bq_dataset')
-BQ_DATASET = 'db_test'
 #BQ_TABLE = Variable.get('bq_table')
-BQ_TABLE = 'business2'
+CLUSTER_NAME = 'dataproc-cluster'
+REGION = 'us-central1'
+PROJECT_ID = 'proyectohenry2'
+BUCKET_NAME = 'data_proy'
+PATH_FILES= 'google maps/metadata-sitios/'
+TEMP_BUCKET_NAME = 'gmaps_data2'
+BQ_DATASET = 'db_test'
+BQ_TABLE = 'business'
+FOLDER_NAME= f"{datetime.now().strftime("%Y%m%d_%H%M%S")}"
 
 # Define the job configuration
 job_config = {
     "reference": {"project_id": PROJECT_ID},
     "placement": {"cluster_name": CLUSTER_NAME},
     "pyspark_job": {        
-        "main_python_file_uri": f"gs://{BUCKET_NAME}/pyspark_job_gmaps.py",
+        "main_python_file_uri": f"gs://{TEMP_BUCKET_NAME}/job_ELT_gmaps.py",
         'jar_file_uris': ['gs://spark-lib/bigquery/spark-bigquery-latest_2.12.jar',                            
                             'gs://spark-lib/bigquery/spark-bigquery-with-dependencies_2.12-0.23.2.jar'],        
         "args": [
-            f"gs://{BUCKET_NAME}/1.json",
+            BUCKET_NAME,
             BQ_DATASET,
             BQ_TABLE,
-            TEMP_BUCKET_NAME
+            TEMP_BUCKET_NAME,
+            PATH_FILES,
+            FOLDER_NAME
         ]
     }
 }
@@ -83,6 +90,6 @@ submit_job = DataprocSubmitJobOperator(
 )   """
 
 # Define task dependencies
-#create_cluster >> 
-submit_job #>> delete_cluster
+create_cluster >> submit_job
+#submit_job #>> delete_cluster
 #submit_job #>> delete_cluster
