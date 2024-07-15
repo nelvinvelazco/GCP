@@ -24,11 +24,12 @@ spark.conf.set('temporaryGcsBucket', tmp_gcs_bucket)
 client = storage.Client()
 bucket = client.get_bucket(bucket_name)
 blobs = bucket.list_blobs(prefix=files_path)
-file_list = [f"gs://{bucket_name}/{files_path}{blob.name}" for blob in blobs]
+file_list = [f"gs://{bucket_name}/{blob.name}" for blob in blobs]
 
 for file in file_list:
     # Leer datos desde GCS
     cont=cont+1    
+    print(f'PROCESANDO {file} ....')
     df_sitios = spark.read.json(file)
     df_estados = spark.read.option("delimiter", ";").option("header", "true").csv(gcs_estados)
 
@@ -111,26 +112,30 @@ for file in file_list:
     df_sitios = df_sitios.select(['business_id','name', 'city', 'state', 'latitude', 'longitude', 'stars', 'price','platform'])
     
     
-    df_category.show()
-    df_Service_options.show()
-    df_Planning.show()
-    df_sitios.show()
+    #df_category.show()
+    #df_Service_options.show()
+    #df_Planning.show()
+    #df_sitios.show()
 
+    df_category= df_category.coalesce(1)
     df_category.write.format('csv') \
                 .mode('overwrite') \
                 .option('header', 'true') \
                 .save(f"gs://{tmp_gcs_bucket}/{folder_name}/category/category_business_{cont}.csv")
 
+    df_Service_options= df_category.coalesce(1)
     df_Service_options.write.format('csv') \
                 .mode('overwrite') \
                 .option('header', 'true') \
                 .save(f"gs://{tmp_gcs_bucket}/{folder_name}/service/service_business_{cont}.csv")
 
+    df_Planning= df_category.coalesce(1)
     df_Planning.write.format('csv') \
                 .mode('overwrite') \
                 .option('header', 'true') \
                 .save(f"gs://{tmp_gcs_bucket}/{folder_name}/planing/planing_business_{cont}.csv")
     
+    df_sitios= df_category.coalesce(1)
     df_sitios.write.format('csv') \
                 .mode('overwrite') \
                 .option('header', 'true') \

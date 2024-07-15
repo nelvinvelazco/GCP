@@ -6,6 +6,7 @@ from airflow.providers.google.cloud.operators.dataproc import (
     DataprocDeleteClusterOperator,
     DataprocSubmitJobOperator,
 )
+from airflow.providers.google.cloud.transfers.gcs_to_bigquery import GCSToBigQueryOperator
 #from airflow.providers.google.cloud.operators.dataproc import ClusterGenerator
 from airflow.models import Variable
 
@@ -25,21 +26,21 @@ dag = DAG(
 
 # Configuración del clúster
 
-#REGION = 'southamerica-east1'
+REGION = 'southamerica-east1'
 #PROJECT_ID = Variable.get('project_id')
 #BUCKET_NAME = Variable.get('gcs_bucket')
 #TEMP_BUCKET_NAME = Variable.get('gcs_temp_bucket')
 #BQ_DATASET = Variable.get('bq_dataset')
 #BQ_TABLE = Variable.get('bq_table')
 CLUSTER_NAME = 'dataproc-cluster'
-REGION = 'us-central1'
+#REGION = 'us-central1'
 PROJECT_ID = 'proyectohenry2'
 BUCKET_NAME = 'data_proy'
 PATH_FILES= 'google maps/metadata-sitios/'
 TEMP_BUCKET_NAME = 'gmaps_data2'
 BQ_DATASET = 'db_test'
 BQ_TABLE = 'business'
-FOLDER_NAME= f"{datetime.now().strftime("%Y%m%d_%H%M%S")}"
+FOLDER_NAME= f'job_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
 
 # Define the job configuration
 job_config = {
@@ -80,6 +81,19 @@ submit_job = DataprocSubmitJobOperator(
     dag=dag,
 )
 
+# Tarea para cargar los archivos CSV en BigQuery
+load_csv_to_bq = GCSToBigQueryOperator(
+    task_id='load_csv_to_bq',
+    bucket= TEMP_BUCKET_NAME,
+    source_objects=[f'{FOLDER_NAME}/*.csv'],
+    destination_project_dataset_table=f'{PROJECT_ID}.{BQ_DATASET}.business',
+    write_disposition='WRITE_TRUNCATE',
+    skip_leading_rows=1,
+    source_format='CSV',
+    field_delimiter=',',
+    create_disposition='CREATE_IF_NEEDED',
+)
+
 # Task to delete the cluster
 """delete_cluster = DataprocDeleteClusterOperator(
     task_id='delete_dataproc_cluster',
@@ -90,6 +104,7 @@ submit_job = DataprocSubmitJobOperator(
 )   """
 
 # Define task dependencies
-create_cluster >> submit_job
+#create_cluster >> submit_job
+submit_job
 #submit_job #>> delete_cluster
 #submit_job #>> delete_cluster
