@@ -123,19 +123,19 @@ for file in file_list:
                 .option('header', 'true') \
                 .save(f"gs://{tmp_gcs_bucket}/{folder_name}/category/category_business_{cont}.csv")
 
-    df_Service_options= df_category.coalesce(1)
+    df_Service_options= df_Service_options.coalesce(1)
     df_Service_options.write.format('csv') \
                 .mode('overwrite') \
                 .option('header', 'true') \
                 .save(f"gs://{tmp_gcs_bucket}/{folder_name}/service/service_business_{cont}.csv")
 
-    df_Planning= df_category.coalesce(1)
+    df_Planning= df_Planning.coalesce(1)
     df_Planning.write.format('csv') \
                 .mode('overwrite') \
                 .option('header', 'true') \
                 .save(f"gs://{tmp_gcs_bucket}/{folder_name}/planing/planing_business_{cont}.csv")
     
-    df_sitios= df_category.coalesce(1)
+    df_sitios= df_sitios.coalesce(1)
     df_sitios.write.format('csv') \
                 .mode('overwrite') \
                 .option('header', 'true') \

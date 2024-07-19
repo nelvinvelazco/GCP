@@ -1,14 +1,17 @@
 from airflow import DAG
-from datetime import datetime
+from google.cloud import storage
+import os
+
 from airflow.utils.dates import days_ago
 from airflow.providers.google.cloud.operators.dataproc import (
     DataprocCreateClusterOperator,
     DataprocDeleteClusterOperator,
     DataprocSubmitJobOperator,
 )
+from airflow.operators.python_operator import PythonOperator
 from airflow.providers.google.cloud.transfers.gcs_to_bigquery import GCSToBigQueryOperator
-#from airflow.providers.google.cloud.operators.dataproc import ClusterGenerator
-from airflow.models import Variable
+
+
 
 # Configuración del DAG
 default_args = {
@@ -23,6 +26,7 @@ dag = DAG(
     description='DAG que crea un clúster de Dataproc, ejecuta un job de PySpark y carga datos en BigQuery',
     schedule_interval=None,
 )
+
 
 # Configuración del clúster
 
@@ -40,7 +44,8 @@ PATH_FILES= 'google maps/metadata-sitios/'
 TEMP_BUCKET_NAME = 'gmaps_data2'
 BQ_DATASET = 'db_test'
 BQ_TABLE = 'business'
-FOLDER_NAME= f'job_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
+#FOLDER_NAME= f'job_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
+FOLDER_NAME= "job_20240715_210016/business"
 
 # Define the job configuration
 job_config = {
@@ -61,6 +66,14 @@ job_config = {
     }
 }
 
+def list_gcs_files(bucket_name, prefix, **kwargs):
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(bucket_name)
+    blobs = bucket.list_blobs(prefix=prefix)
+    files = [blob.name for blob in blobs if blob.name.endswith('.csv')]
+    kwargs['ti'].xcom_push(key='file_list', value=files)
+
+"""
 # Task to create the cluster
 create_cluster = DataprocCreateClusterOperator(
     task_id='create_dataproc_cluster',
@@ -80,18 +93,33 @@ submit_job = DataprocSubmitJobOperator(
     project_id=PROJECT_ID,
     dag=dag,
 )
+"""
+
+# Tarea para listar los archivos en GCS
+list_files = PythonOperator(
+    task_id='list_gcs_files',
+    python_callable=list_gcs_files,
+    op_kwargs={
+        'bucket_name': TEMP_BUCKET_NAME,
+        'prefix': FOLDER_NAME
+    },
+    provide_context=True,
+    dag=dag
+)
 
 # Tarea para cargar los archivos CSV en BigQuery
 load_csv_to_bq = GCSToBigQueryOperator(
     task_id='load_csv_to_bq',
     bucket= TEMP_BUCKET_NAME,
-    source_objects=[f'{FOLDER_NAME}/*.csv'],
+    #source_objects=[f'{FOLDER_NAME}/*/*.csv'],
+    source_objects="{{ task_instance.xcom_pull(task_ids='list_gcs_files', key='file_list') }}",
     destination_project_dataset_table=f'{PROJECT_ID}.{BQ_DATASET}.business',
     write_disposition='WRITE_TRUNCATE',
     skip_leading_rows=1,
     source_format='CSV',
     field_delimiter=',',
     create_disposition='CREATE_IF_NEEDED',
+    dag=dag,
 )
 
 # Task to delete the cluster
@@ -104,7 +132,8 @@ load_csv_to_bq = GCSToBigQueryOperator(
 )   """
 
 # Define task dependencies
+load_csv_to_bq
 #create_cluster >> submit_job
-submit_job
+#submit_job
 #submit_job #>> delete_cluster
 #submit_job #>> delete_cluster
