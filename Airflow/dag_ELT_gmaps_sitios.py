@@ -71,7 +71,7 @@ def list_gcs_files(bucket_name, prefix, **kwargs):
     bucket = storage_client.bucket(bucket_name)
     blobs = bucket.list_blobs(prefix=prefix)
     files = [blob.name for blob in blobs if blob.name.endswith('.csv')]
-    kwargs['ti'].xcom_push(key='file_list', value=files)
+    kwargs['ti'].xcom_push(key='file_list', value=files)    
 
 """
 # Task to create the cluster
@@ -104,7 +104,7 @@ list_files = PythonOperator(
         'prefix': FOLDER_NAME
     },
     provide_context=True,
-    dag=dag
+    dag=dag,
 )
 
 # Tarea para cargar los archivos CSV en BigQuery
@@ -113,7 +113,7 @@ load_csv_to_bq = GCSToBigQueryOperator(
     bucket= TEMP_BUCKET_NAME,
     #source_objects=[f'{FOLDER_NAME}/*/*.csv'],
     source_objects="{{ task_instance.xcom_pull(task_ids='list_gcs_files', key='file_list') }}",
-    destination_project_dataset_table=f'{PROJECT_ID}.{BQ_DATASET}.business',
+    destination_project_dataset_table=f'{PROJECT_ID}.{BQ_DATASET}.category',
     write_disposition='WRITE_TRUNCATE',
     skip_leading_rows=1,
     source_format='CSV',
@@ -132,7 +132,7 @@ load_csv_to_bq = GCSToBigQueryOperator(
 )   """
 
 # Define task dependencies
-load_csv_to_bq
+list_files >> load_csv_to_bq
 #create_cluster >> submit_job
 #submit_job
 #submit_job #>> delete_cluster
