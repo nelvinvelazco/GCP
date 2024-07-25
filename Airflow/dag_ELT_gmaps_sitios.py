@@ -29,7 +29,7 @@ dag = DAG(
 
 
 # Configuración del clúster
-
+files = []
 REGION = 'southamerica-east1'
 #PROJECT_ID = Variable.get('project_id')
 #BUCKET_NAME = Variable.get('gcs_bucket')
@@ -46,6 +46,16 @@ BQ_DATASET = 'db_test'
 BQ_TABLE = 'business'
 #FOLDER_NAME= f'job_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
 FOLDER_NAME= "job_20240715_210016/business"
+
+
+def list_gcs_files(**kwargs):
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(TEMP_BUCKET_NAME)
+    blobs = bucket.list_blobs(prefix=FOLDER_NAME)
+    #files = [blob.name for blob in blobs if blob.name.endswith('.csv')]
+    file_list = ['/'.join(blob.name.split('/')[:-1])+'/*.csv' for blob in blobs if blob.name.endswith('.csv')]
+    kwargs['ti'].xcom_push(key='file_list', value=file_list)
+
 
 # Define the job configuration
 job_config = {
@@ -65,14 +75,7 @@ job_config = {
         ]
     }
 }
-
-def list_gcs_files(bucket_name, prefix, **kwargs):
-    storage_client = storage.Client()
-    bucket = storage_client.bucket(bucket_name)
-    blobs = bucket.list_blobs(prefix=prefix)
-    files = [blob.name for blob in blobs if blob.name.endswith('.csv')]
-    kwargs['ti'].xcom_push(key='file_list', value=files)    
-
+    
 """
 # Task to create the cluster
 create_cluster = DataprocCreateClusterOperator(
@@ -95,24 +98,28 @@ submit_job = DataprocSubmitJobOperator(
 )
 """
 
+
 # Tarea para listar los archivos en GCS
 list_files = PythonOperator(
     task_id='list_gcs_files',
     python_callable=list_gcs_files,
-    op_kwargs={
-        'bucket_name': TEMP_BUCKET_NAME,
-        'prefix': FOLDER_NAME
-    },
     provide_context=True,
     dag=dag,
 )
+
 
 # Tarea para cargar los archivos CSV en BigQuery
 load_csv_to_bq = GCSToBigQueryOperator(
     task_id='load_csv_to_bq',
     bucket= TEMP_BUCKET_NAME,
-    #source_objects=[f'{FOLDER_NAME}/*/*.csv'],
-    source_objects="{{ task_instance.xcom_pull(task_ids='list_gcs_files', key='file_list') }}",
+    schema_fields=[
+            {'name': 'category', 'type': 'STRING', 'mode': 'NULLABLE'},
+            {'name': 'category_name', 'type': 'STRING', 'mode': 'NULLABLE'},
+    ],
+    source_objects=['job_20240715_210016/business/business_1.csv/*.csv', 'job_20240715_210016/business/business_2.csv/*.csv'],
+    #source_objects=[f'{FOLDER_NAME}/**/*.csv'],    
+    #source_objects= files,
+    #source_objects="{{ task_instance.xcom_pull(task_ids='list_gcs_files', key='file_list') }}"
     destination_project_dataset_table=f'{PROJECT_ID}.{BQ_DATASET}.category',
     write_disposition='WRITE_TRUNCATE',
     skip_leading_rows=1,
@@ -133,7 +140,8 @@ load_csv_to_bq = GCSToBigQueryOperator(
 
 # Define task dependencies
 list_files >> load_csv_to_bq
+#list_files >> load_csv_to_bq
+#load_csv_to_bq
 #create_cluster >> submit_job
 #submit_job
-#submit_job #>> delete_cluster
 #submit_job #>> delete_cluster
