@@ -29,7 +29,6 @@ dag = DAG(
 
 
 # Configuración del clúster
-files = []
 REGION = 'southamerica-east1'
 #PROJECT_ID = Variable.get('project_id')
 #BUCKET_NAME = Variable.get('gcs_bucket')
@@ -51,9 +50,10 @@ FOLDER_NAME= "job_20240715_210016/business"
 def list_gcs_files(**kwargs):
     storage_client = storage.Client()
     bucket = storage_client.bucket(TEMP_BUCKET_NAME)
-    blobs = bucket.list_blobs(prefix=FOLDER_NAME)
+    blobs = bucket.list_blobs(prefix=FOLDER_NAME)    
     #files = [blob.name for blob in blobs if blob.name.endswith('.csv')]
-    file_list = ['/'.join(blob.name.split('/')[:-1])+'/*.csv' for blob in blobs if blob.name.endswith('.csv')]
+    #file_list = ['/'.join(blob.name.split('/')[:-1])+'/*.csv' for blob in blobs if blob.name.endswith('.csv')]
+    file_list = [f"gs://{TEMP_BUCKET_NAME}/{blob.name}" for blob in blobs if blob.name.endswith('.csv')]
     kwargs['ti'].xcom_push(key='file_list', value=file_list)
 
 
@@ -63,6 +63,23 @@ job_config = {
     "placement": {"cluster_name": CLUSTER_NAME},
     "pyspark_job": {        
         "main_python_file_uri": f"gs://{TEMP_BUCKET_NAME}/job_ELT_gmaps.py",
+        'jar_file_uris': ['gs://spark-lib/bigquery/spark-bigquery-latest_2.12.jar',                            
+                            'gs://spark-lib/bigquery/spark-bigquery-with-dependencies_2.12-0.23.2.jar'],        
+        "args": [
+            BQ_DATASET,
+            BQ_TABLE,
+            TEMP_BUCKET_NAME,
+            FOLDER_NAME
+        ]
+    }
+}
+
+# Define the job configuration
+job_config2 = {
+    "reference": {"project_id": PROJECT_ID},
+    "placement": {"cluster_name": TEMP_BUCKET_NAME},
+    "pyspark_job": {        
+        "main_python_file_uri": f"gs://{TEMP_BUCKET_NAME}/job_guardar_BigQuery.py",
         'jar_file_uris': ['gs://spark-lib/bigquery/spark-bigquery-latest_2.12.jar',                            
                             'gs://spark-lib/bigquery/spark-bigquery-with-dependencies_2.12-0.23.2.jar'],        
         "args": [
@@ -98,17 +115,8 @@ submit_job = DataprocSubmitJobOperator(
 )
 """
 
-
-# Tarea para listar los archivos en GCS
-list_files = PythonOperator(
-    task_id='list_gcs_files',
-    python_callable=list_gcs_files,
-    provide_context=True,
-    dag=dag,
-)
-
-
 # Tarea para cargar los archivos CSV en BigQuery
+"""
 load_csv_to_bq = GCSToBigQueryOperator(
     task_id='load_csv_to_bq',
     bucket= TEMP_BUCKET_NAME,
@@ -128,6 +136,25 @@ load_csv_to_bq = GCSToBigQueryOperator(
     create_disposition='CREATE_IF_NEEDED',
     dag=dag,
 )
+"""
+
+# Tarea para listar los archivos en GCS
+list_files = PythonOperator(
+    task_id='list_gcs_files',
+    python_callable=list_gcs_files,
+    provide_context=True,
+    dag=dag,
+)
+
+
+# Task to submit the job
+submit_job = DataprocSubmitJobOperator(
+    task_id='submit_dataproc_job',
+    job=job_config2,
+    region=REGION,
+    project_id=PROJECT_ID,
+    dag=dag,
+)
 
 # Task to delete the cluster
 """delete_cluster = DataprocDeleteClusterOperator(
@@ -139,7 +166,8 @@ load_csv_to_bq = GCSToBigQueryOperator(
 )   """
 
 # Define task dependencies
-list_files >> load_csv_to_bq
+list_files >> submit_job
+#list_files >> load_csv_to_bq
 #list_files >> load_csv_to_bq
 #load_csv_to_bq
 #create_cluster >> submit_job
