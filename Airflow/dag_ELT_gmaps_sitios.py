@@ -1,6 +1,7 @@
 from airflow import DAG
 from google.cloud import storage
 import os
+from datetime import datetime
 
 from airflow.utils.dates import days_ago
 from airflow.providers.google.cloud.operators.dataproc import (
@@ -43,10 +44,10 @@ PATH_FILES= 'google maps/metadata-sitios/'
 TEMP_BUCKET_NAME = 'gmaps_data2'
 BQ_DATASET = 'db_test'
 BQ_TABLE = 'business'
-#FOLDER_NAME= f'job_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
-FOLDER_NAME= "job_20240715_210016/business"
+FOLDER_NAME= f'job_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
+#FOLDER_NAME= "job_20240715_210016"
 
-
+"""
 def list_gcs_files(**kwargs):
     storage_client = storage.Client()
     bucket = storage_client.bucket(TEMP_BUCKET_NAME)
@@ -55,7 +56,7 @@ def list_gcs_files(**kwargs):
     #file_list = ['/'.join(blob.name.split('/')[:-1])+'/*.csv' for blob in blobs if blob.name.endswith('.csv')]
     file_list = [f"gs://{TEMP_BUCKET_NAME}/{blob.name}" for blob in blobs if blob.name.endswith('.csv')]
     kwargs['ti'].xcom_push(key='file_list', value=file_list)
-
+"""
 
 # Define the job configuration
 job_config = {
@@ -66,34 +67,34 @@ job_config = {
         'jar_file_uris': ['gs://spark-lib/bigquery/spark-bigquery-latest_2.12.jar',                            
                             'gs://spark-lib/bigquery/spark-bigquery-with-dependencies_2.12-0.23.2.jar'],        
         "args": [
-            BQ_DATASET,
-            BQ_TABLE,
-            TEMP_BUCKET_NAME,
-            FOLDER_NAME
-        ]
-    }
-}
-
-# Define the job configuration
-job_config2 = {
-    "reference": {"project_id": PROJECT_ID},
-    "placement": {"cluster_name": TEMP_BUCKET_NAME},
-    "pyspark_job": {        
-        "main_python_file_uri": f"gs://{TEMP_BUCKET_NAME}/job_guardar_BigQuery.py",
-        'jar_file_uris': ['gs://spark-lib/bigquery/spark-bigquery-latest_2.12.jar',                            
-                            'gs://spark-lib/bigquery/spark-bigquery-with-dependencies_2.12-0.23.2.jar'],        
-        "args": [
             BUCKET_NAME,
             BQ_DATASET,
             BQ_TABLE,
             TEMP_BUCKET_NAME,
             PATH_FILES,
-            FOLDER_NAME
+            #FOLDER_NAME,
+            "{{ task_instance.xcom_pull(task_ids='folder', key='folder') }}",            
+        ]
+    }
+}
+
+# Define the job configuration
+job_config_bq = {
+    "reference": {"project_id": PROJECT_ID},
+    "placement": {"cluster_name": CLUSTER_NAME},
+    "pyspark_job": {        
+        "main_python_file_uri": f"gs://{TEMP_BUCKET_NAME}/job_guardar_BigQuery.py",
+        'jar_file_uris': ['gs://spark-lib/bigquery/spark-bigquery-latest_2.12.jar',                            
+                            'gs://spark-lib/bigquery/spark-bigquery-with-dependencies_2.12-0.23.2.jar'],        
+        "args": [            
+            BQ_DATASET,
+            TEMP_BUCKET_NAME,            
+            #FOLDER_NAME,
+            "{{ task_instance.xcom_pull(task_ids='folder', key='folder') }}",
         ]
     }
 }
     
-"""
 # Task to create the cluster
 create_cluster = DataprocCreateClusterOperator(
     task_id='create_dataproc_cluster',
@@ -106,14 +107,13 @@ create_cluster = DataprocCreateClusterOperator(
 )
 
 # Task to submit the job
-submit_job = DataprocSubmitJobOperator(
-    task_id='submit_dataproc_job',
+Job_Transform = DataprocSubmitJobOperator(
+    task_id='Dataproc_Transformacion',
     job=job_config,
     region=REGION,
     project_id=PROJECT_ID,
     dag=dag,
 )
-"""
 
 # Tarea para cargar los archivos CSV en BigQuery
 """
@@ -137,7 +137,7 @@ load_csv_to_bq = GCSToBigQueryOperator(
     dag=dag,
 )
 """
-
+"""
 # Tarea para listar los archivos en GCS
 list_files = PythonOperator(
     task_id='list_gcs_files',
@@ -145,15 +145,29 @@ list_files = PythonOperator(
     provide_context=True,
     dag=dag,
 )
+"""
+
+def get_date_folder(**kwargs):
+    folder= f'job_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
+    kwargs['ti'].xcom_push(key='folder', value=folder)
+
+
+# Tarea para listar los archivos en GCS
+folder_date = PythonOperator(
+    task_id='list_gcs_files',
+    python_callable=get_date_folder,
+    provide_context=True,
+    dag=dag,
+)
 
 
 # Task to submit the job
-submit_job = DataprocSubmitJobOperator(
-    task_id='submit_dataproc_job',
-    job=job_config2,
-    region=REGION,
-    project_id=PROJECT_ID,
-    dag=dag,
+Guardar_BQ = DataprocSubmitJobOperator(
+    task_id= 'DataProc_Guardar_BQ',
+    job= job_config_bq,
+    region= REGION,
+    project_id= PROJECT_ID,
+    dag= dag,
 )
 
 # Task to delete the cluster
@@ -166,10 +180,10 @@ submit_job = DataprocSubmitJobOperator(
 )   """
 
 # Define task dependencies
-list_files >> submit_job
+#create_cluster >> submit_job
 #list_files >> load_csv_to_bq
 #list_files >> load_csv_to_bq
 #load_csv_to_bq
 #create_cluster >> submit_job
-#submit_job
+folder_date >> Job_Transform >> Guardar_BQ
 #submit_job #>> delete_cluster
