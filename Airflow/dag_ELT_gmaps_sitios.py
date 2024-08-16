@@ -2,6 +2,7 @@ from airflow import DAG
 from google.cloud import storage
 import os
 from datetime import datetime
+from airflow.models import Variable
 
 from airflow.utils.dates import days_ago
 from airflow.providers.google.cloud.operators.dataproc import (
@@ -30,22 +31,29 @@ dag = DAG(
 
 
 # Configuración del clúster
-REGION = 'southamerica-east1'
+#REGION = 'southamerica-east1'
+REGION = 'us-central1'
 #PROJECT_ID = Variable.get('project_id')
 #BUCKET_NAME = Variable.get('gcs_bucket')
 #TEMP_BUCKET_NAME = Variable.get('gcs_temp_bucket')
 #BQ_DATASET = Variable.get('bq_dataset')
 #BQ_TABLE = Variable.get('bq_table')
 CLUSTER_NAME = 'dataproc-cluster'
-#REGION = 'us-central1'
-PROJECT_ID = 'proyectohenry2'
-BUCKET_NAME = 'data_proy'
-PATH_FILES= 'google maps/metadata-sitios/'
-TEMP_BUCKET_NAME = 'gmaps_data2'
+PROJECT_ID = 'practicas-432620'
+BUCKET_NAME = 'data-pruebas'
+#PATH_FILES= 'google maps/metadata-sitios/'
+PATH_FILES= 'google maps/test/'
+TEMP_BUCKET_NAME = 'data_proc_proy'
 BQ_DATASET = 'db_test'
 BQ_TABLE = 'business'
-FOLDER_NAME= f'job_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
+#FOLDER_NAME= f'job_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
 #FOLDER_NAME= "job_20240715_210016"
+
+if not Variable.get("output_folder", default_var=None):    
+    output_folder = f'job_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
+    Variable.set("output_folder", output_folder)
+else:
+    output_folder = Variable.get("output_folder")
 
 """
 def list_gcs_files(**kwargs):
@@ -72,8 +80,9 @@ job_config = {
             BQ_TABLE,
             TEMP_BUCKET_NAME,
             PATH_FILES,
+            output_folder,
             #FOLDER_NAME,
-            "{{ task_instance.xcom_pull(task_ids='folder', key='folder') }}",            
+            #"{{ task_instance.xcom_pull(task_ids='folder', key='folder') }}",            
         ]
     }
 }
@@ -88,9 +97,10 @@ job_config_bq = {
                             'gs://spark-lib/bigquery/spark-bigquery-with-dependencies_2.12-0.23.2.jar'],        
         "args": [            
             BQ_DATASET,
-            TEMP_BUCKET_NAME,            
+            TEMP_BUCKET_NAME,
+            output_folder,
             #FOLDER_NAME,
-            "{{ task_instance.xcom_pull(task_ids='folder', key='folder') }}",
+            #"{{ task_instance.xcom_pull(task_ids='folder', key='folder') }}",
         ]
     }
 }
@@ -147,20 +157,6 @@ list_files = PythonOperator(
 )
 """
 
-def get_date_folder(**kwargs):
-    folder= f'job_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
-    kwargs['ti'].xcom_push(key='folder', value=folder)
-
-
-# Tarea para listar los archivos en GCS
-folder_date = PythonOperator(
-    task_id='list_gcs_files',
-    python_callable=get_date_folder,
-    provide_context=True,
-    dag=dag,
-)
-
-
 # Task to submit the job
 Guardar_BQ = DataprocSubmitJobOperator(
     task_id= 'DataProc_Guardar_BQ',
@@ -171,19 +167,14 @@ Guardar_BQ = DataprocSubmitJobOperator(
 )
 
 # Task to delete the cluster
-"""delete_cluster = DataprocDeleteClusterOperator(
+delete_cluster = DataprocDeleteClusterOperator(
     task_id='delete_dataproc_cluster',
     project_id=PROJECT_ID,
     cluster_name=CLUSTER_NAME,
     region=REGION,
     dag=dag,
-)   """
+)
 
 # Define task dependencies
-#create_cluster >> submit_job
-#list_files >> load_csv_to_bq
-#list_files >> load_csv_to_bq
-#load_csv_to_bq
-#create_cluster >> submit_job
-folder_date >> Job_Transform >> Guardar_BQ
+create_cluster >> Job_Transform >> Guardar_BQ >> delete_cluster
 #submit_job #>> delete_cluster

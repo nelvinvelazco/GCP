@@ -11,7 +11,7 @@ bq_table = sys.argv[3]
 tmp_gcs_bucket = sys.argv[4]
 files_path = sys.argv[5]
 folder_name= sys.argv[6]
-gcs_estados = 'gs://gmaps_data2/estados_usa.csv'
+gcs_estados = 'gs://data_proc_proy/estados_usa.csv'
 cont= 0
 
 # Crear sesión de Spark
@@ -133,7 +133,7 @@ for file in file_list:
     df_Planning.write.format('csv') \
                 .mode('overwrite') \
                 .option('header', 'true') \
-                .save(f"gs://{tmp_gcs_bucket}/{folder_name}/planing/planing_business_{cont}.csv")
+                .save(f"gs://{tmp_gcs_bucket}/{folder_name}/planning/planning_business_{cont}.csv")
     
     df_sitios= df_sitios.coalesce(1)
     df_sitios.write.format('csv') \
