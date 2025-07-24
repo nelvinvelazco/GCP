@@ -47,7 +47,7 @@ for file in file_list:
 
     df_sitios= df_sitios.fillna({'price':'SIN DATO', 'state':'SIN DATO'})     # Se imputan los valores nulos a 'SIN DATO'
 
-    # Definir la función UDF
+    # Definir la función UDF (Funcion definida por el Usuario)
     def ext_ciudad_estado(dir, estados_dict):
         ciudad = "SIN DATO"
         estado = "SIN DATO"
