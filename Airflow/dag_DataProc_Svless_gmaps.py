@@ -15,9 +15,9 @@ default_args = {
 }
 
 dag = DAG(
-    'ETL_pyspark_gmaps',
+    'Dataproc_Serverless',
     default_args=default_args,
-    description='DAG que crea un clúster de Dataproc, ejecuta un job de PySpark y carga datos en BigQuery',
+    description='Envia y ejecuta un job de PySpark en Dataproc ServerLess y carga datos en BigQuery',
     schedule_interval=None,
 )
 
@@ -42,15 +42,33 @@ job_config = {
     "placement": {"cluster_name": CLUSTER_NAME},
     "pyspark_job": {        
         "main_python_file_uri": f"gs://{TEMP_BUCKET_NAME}/pyspark_job_gmaps.py",
-        "jar_file_uris": [],        
+        'jar_file_uris': ['gs://spark-lib/bigquery/spark-bigquery-latest_2.12.jar',                            
+                            'gs://spark-lib/bigquery/spark-bigquery-with-dependencies_2.12-0.23.2.jar'],        
         "args": [
-            f"gs://{BUCKET_NAME}/google maps/metadata-sitios/2.json",
+            f"gs://{BUCKET_NAME}/google maps/metadata-sitios/1.json",
             BQ_DATASET,
             BQ_TABLE,
             TEMP_BUCKET_NAME
         ]
     }
 }
+
+serverless_job = {
+        "placement": {
+            "cluster_name": None  # Esto es obligatorio para Serverless
+        },
+        "pyspark_job": {
+            "main_python_file_uri": f"gs://{TEMP_BUCKET_NAME}/pyspark_job_gmaps.py",
+            'jar_file_uris': ['gs://spark-lib/bigquery/spark-bigquery-latest_2.12.jar',                            
+                            'gs://spark-lib/bigquery/spark-bigquery-with-dependencies_2.12-0.23.2.jar'],
+            "args": [
+                f"gs://{BUCKET_NAME}/google maps/metadata-sitios/1.json",
+                BQ_DATASET,
+                BQ_TABLE,
+                TEMP_BUCKET_NAME
+            ]
+        }
+    }
 # Task to create the cluster
 """create_cluster = DataprocCreateClusterOperator(
     task_id='create_dataproc_cluster',
@@ -64,8 +82,8 @@ job_config = {
 
 # Task to submit the job
 submit_job = DataprocSubmitJobOperator(
-    task_id='submit_dataproc_job',
-    job=job_config,
+    task_id='submit_dataproc_serverless_job',
+    job=serverless_job,
     region=REGION,
     project_id=PROJECT_ID,
     dag=dag,
@@ -81,7 +99,6 @@ submit_job = DataprocSubmitJobOperator(
 )   """
 
 # Define task dependencies
-#create_cluster >> 
 submit_job
 #submit_job #>> delete_cluster
 #submit_job #>> delete_cluster

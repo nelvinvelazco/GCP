@@ -5,14 +5,16 @@ from pyspark.sql.types import StringType, StructType, StructField
 
 # Argumentos
 gcs_input_path = sys.argv[1]
+#gcs_input_path = 'gs://data-pruebas/google maps/metadata-sitios/1.json'
 bq_dataset = sys.argv[2]
 bq_table = sys.argv[3]
 temporary_gcs_bucket = sys.argv[4]
-gcs_estados = 'gs://gmaps_data2/estados_usa.csv'
+gcs_estados = 'gs://data_proc_proy/estados_usa.csv'
 
 # Crear sesión de Spark
 spark = SparkSession.builder \
     .appName('GCS to BigQuery') \
+    .config("spark.jars", "gs://spark-lib/bigquery/spark-bigquery-with-dependencies_2.12-0.26.0.jar") \
     .getOrCreate()
 
 spark.conf.set('temporaryGcsBucket', temporary_gcs_bucket)
