@@ -1,0 +1,6 @@
+- Instalar Gcloud : (GoogleCloudSDKInstaller)
+- Agregar gcloud al PATH
+- Para usar con PowerShell hay que habilitar la ejecucion de scripts con este comando:
+    "Set-ExecutionPolicy RemoteSigned -Scope CurrentUser"
+- Ejecutar "Gcloud init" para Loguearse a la cuenta de google
+-Luego pedira seleccionar proyecto y region

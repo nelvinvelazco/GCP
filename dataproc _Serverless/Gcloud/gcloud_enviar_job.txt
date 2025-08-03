@@ -1,0 +1,7 @@
+link: https://codelabs.developers.google.com/dataproc-serverless?hl=es-419#0
+
+- gcloud dataproc batches submit pyspark job_pypark.py \
+    --batch=job-pyspark \
+    --region='us-central1' \
+    --deps-bucket=gs://data_proc_proy
+    
